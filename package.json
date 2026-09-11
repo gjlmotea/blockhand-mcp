@@ -1,0 +1,52 @@
+{
+  "name": "@vibe/minecraft-edu-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "BlockHand（積木之手）：透過 Minecraft Education 的 /wsserver 連線命令提供 Agent 動作、世界讀寫、幾何建造、事件訂閱與受控指令的 MCP server。",
+  "license": "MIT",
+  "engines": {
+    "node": "22.23.1"
+  },
+  "packageManager": "pnpm@11.17.0",
+  "main": "./dist/index.js",
+  "bin": {
+    "minecraft-edu-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json",
+    "smoke": "node scripts/stdio-smoke.mjs",
+    "live": "node scripts/live-check.mjs",
+    "blockhand": "node scripts/blockhand.mjs",
+    "setup:codex": "node scripts/blockhand.mjs install --client=codex",
+    "setup:claude": "node scripts/blockhand.mjs install --client=claude",
+    "setup:gemini": "node scripts/blockhand.mjs install --client=gemini",
+    "setup:grok": "node scripts/blockhand.mjs install --client=grok",
+    "doctor": "node scripts/blockhand.mjs doctor",
+    "connect": "node scripts/blockhand.mjs connect",
+    "uninstall:codex": "node scripts/blockhand.mjs uninstall --client=codex",
+    "uninstall:claude": "node scripts/blockhand.mjs uninstall --client=claude",
+    "uninstall:gemini": "node scripts/blockhand.mjs uninstall --client=gemini",
+    "uninstall:grok": "node scripts/blockhand.mjs uninstall --client=grok",
+    "run-plan": "node scripts/run-tools.mjs",
+    "verify": "pnpm run typecheck && pnpm run test && pnpm run build && pnpm run smoke",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "ws": "8.21.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "@types/ws": "8.18.1",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}

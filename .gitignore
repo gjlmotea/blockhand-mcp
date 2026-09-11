@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.mcp-state/
+.env
+.env.*
+!.env.example
+*.local
+*.log
+.DS_Store
+Thumbs.db
