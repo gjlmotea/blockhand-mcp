@@ -1,3 +1,5 @@
+import type { UndoStatus } from './undo.js';
+
 /**
  * BlockHand 領域契約。
  *
@@ -42,6 +44,7 @@ export type StructureMirror = (typeof STRUCTURE_MIRRORS)[number];
 
 /** 單一指令送進遊戲後的結果。遊戲永遠回一包 JSON，這裡保持原樣不猜測。 */
 export interface CommandOutcome {
+  readonly undo?: UndoStatus;
   readonly ok: boolean;
   readonly commandLine: string;
   readonly statusCode: number | null;
@@ -53,6 +56,7 @@ export interface CommandOutcome {
 
 /** 一批指令的彙總結果，用於 agent program 與建造。 */
 export interface BatchOutcome {
+  readonly undo?: UndoStatus;
   readonly ok: boolean;
   readonly issued: number;
   readonly succeeded: number;
@@ -76,6 +80,14 @@ export interface ConnectionStatus {
   readonly commandsIssued: number;
   /** 是否已完成 WebSocket 加密握手。Education 的「需要加密的 WebSocket」開啟時必須為 true，否則遊戲會靜默丟棄所有指令。 */
   readonly encrypted: boolean;
+  /** Socket connectivity is separate from game command responsiveness. */
+  readonly commandState?: 'unknown' | 'responsive' | 'timed-out';
+  readonly lastCommandResponseAt?: string | null;
+  readonly lastCommandTimeoutAt?: string | null;
+  /** 已送進遊戲、還在等回覆的指令數；橋接一次只送一條，所以只會是 0 或 1。 */
+  readonly inFlightCommands?: number;
+  /** 還沒送出、正在排隊的指令數。大於 0 代表卡點在呼叫端的併發，不是遊戲。 */
+  readonly queuedCommands?: number;
 }
 
 export interface GameEventRecord {

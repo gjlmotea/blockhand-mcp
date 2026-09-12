@@ -21,7 +21,7 @@ import {
 import { CLIENT_IDS, resolveClient } from './lib/mcp-clients.mjs';
 
 const EXPECTED_PNPM_VERSION = '11.17.0';
-const EXPECTED_TOOL_COUNT = 42;
+const EXPECTED_TOOL_COUNT = 44;
 const EXPECTED_RESOURCE_COUNT = 2;
 const PROJECT_ROOT = canonicalPath(fileURLToPath(new URL('..', import.meta.url)));
 const LAUNCHER_PATH = canonicalPath(fileURLToPath(new URL('./launch-mcp.mjs', import.meta.url)));

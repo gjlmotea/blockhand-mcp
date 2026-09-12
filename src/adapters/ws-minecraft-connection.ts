@@ -27,7 +27,7 @@ import type {
   GameEventRecord,
 } from '../domain/contracts.js';
 import { MinecraftBridgeError } from '../domain/contracts.js';
-import type { MinecraftConnection, SequenceOptions } from '../ports/minecraft-connection.js';
+import type { CommandOptions, MinecraftConnection, SequenceOptions } from '../ports/minecraft-connection.js';
 import { log } from '../logger.js';
 import type { EncryptionSession } from './ws-encryption.js';
 import { createEncryptionOffer, extractPublicKey } from './ws-encryption.js';
@@ -54,6 +54,14 @@ interface PendingRequest {
   readonly timer: NodeJS.Timeout;
   /** 橋接自己發的保活探測，不算進 commandsIssued，也不參與 sole-pending 歸屬。 */
   readonly internal: boolean;
+  /**
+   * 在 settle 之前**同步**執行的掛鉤，只給必須改變傳輸層狀態的回覆用。
+   *
+   * 加密握手是唯一的使用者：ws 會在同一個同步批次裡把整段接收的訊框 emit 完，
+   * 所以解密器必須在處理下一個訊框之前就裝好。等 `await` 的 microtask 才裝，
+   * 同批後續的加密訊框會被當明文丟棄，串流也會與遊戲錯開。
+   */
+  readonly onResponse: ((body: Record<string, unknown>, purpose: string) => void) | undefined;
 }
 
 interface IncomingMessage {
@@ -81,6 +89,23 @@ const BRIDGE_CLOSE_TIMEOUT_MS = 1500;
  */
 const KEEPALIVE_COMMAND = 'time query daytime';
 const KEEPALIVE_TIMEOUT_MS = 10_000;
+/**
+ * 幾次探測完全沒有回應才判死。
+ *
+ * 一次未回不能證明斷線：遊戲可能正在載入、背景暫停或短暫卡頓。
+ * 容忍短暫無回應，避免在 TCP 仍可用時就要求玩家重打 /connect；
+ * 這些可能原因仍需實機對照確認。
+ */
+const KEEPALIVE_MISS_LIMIT = 3;
+/**
+ * 排隊等待送出的指令上限。
+ *
+ * MCP 的 request handler 是併發的（SDK 收到 tools/call 就直接 dispatch，不等
+ * 前一個做完），所以呼叫端平行丟工具時這裡會同時收到多條指令。指令一律排隊
+ * 逐條送，目的是限制同時對遊戲發出的請求數：避免額外負載，也避免多條同時在飛
+ * 時 requestId 對不上的回覆無法歸屬。佇列滿了就明確拒絕，不無聲累積。
+ */
+const MAX_QUEUED_COMMANDS = 64;
 
 export function createWsMinecraftConnection(options: WsConnectionOptions): MinecraftConnection {
   let server: WebSocketServer | null = null;
@@ -90,6 +115,32 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
   let connectionCount = 0;
   let commandsIssued = 0;
   let session: EncryptionSession | null = null;
+  let commandState: NonNullable<ConnectionStatus['commandState']> = 'unknown';
+  let lastCommandResponseAt: string | null = null;
+  let lastCommandTimeoutAt: string | null = null;
+  // After any timeout, an uncorrelated reply may belong to that retired request.
+  // Nothing observable proves the late reply will never arrive: the game is not
+  // contractually ordered, and "no reply yet" is not "no reply ever". So the
+  // guess-by-sole-pending path stays off for the rest of this socket; only a new
+  // socket restores it. Matching requestIds keep working throughout.
+  let allowAmbiguousResponse = true;
+  let keepaliveMisses = 0;
+  /**
+   * 目前這條遊戲連線的送出佇列。
+   *
+   * 刻意綁在 socket 上而不是整個橋接：換線時舊佇列整批退休，舊的 callback 只會
+   * 去扣它自己那個物件的計數（不會把新 session 扣成負數），新遊戲的握手拿到的
+   * 是一條空佇列，不會被上一局塞滿的佇列擋住。
+   */
+  let commandSession: {
+    readonly socket: WebSocket;
+    /** 逐條送出的串接點。永遠已 catch，所以不會有 unhandled rejection。 */
+    chain: Promise<void>;
+    /** 這條 session 裡還沒送出的指令數。 */
+    queued: number;
+    /** 退休後一律回報未送出，不再送任何東西進遊戲。 */
+    open: boolean;
+  } | null = null;
 
   const pending = new Map<string, PendingRequest>();
   const subscribed = new Set<string>();
@@ -123,6 +174,11 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
       bufferedEvents: buffer.length,
       commandsIssued,
       encrypted: session !== null,
+      commandState,
+      lastCommandResponseAt,
+      lastCommandTimeoutAt,
+      inFlightCommands: pending.size,
+      queuedCommands: commandSession?.queued ?? 0,
     };
   }
 
@@ -135,6 +191,15 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
       );
     }
     return socket;
+  }
+
+  async function readySocket(): Promise<WebSocket> {
+    const target = requireSocket();
+    if (negotiation !== null) await negotiation;
+    if (socket !== target || target.readyState !== 1) {
+      throw new MinecraftBridgeError('connection-changed', '等待握手時遊戲連線已改變；沒有把原指令送到新連線。');
+    }
+    return target;
   }
 
   /** 唯一的送出口：握手完成後自動轉為加密二進位訊框。 */
@@ -188,6 +253,21 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
     if (request === undefined) return;
     pending.delete(requestId);
     clearTimeout(request.timer);
+    commandState = 'responsive';
+    lastCommandResponseAt = new Date().toISOString();
+
+    // 必須在回到 ws 的接收迴圈之前跑完，否則同批的下一個訊框就來不及了。
+    // 掛鉤丟錯不能讓例外逃進 ws 的 message handler（那會變成未捕捉例外），
+    // 也不能讓這個請求停在未 settle 的狀態。
+    if (request.onResponse !== undefined) {
+      try {
+        request.onResponse(body, purpose);
+      } catch (error: unknown) {
+        log('error', 'synchronous response hook failed', {
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
     const rawStatus = body['statusCode'];
     const statusCode = typeof rawStatus === 'number' ? rawStatus : null;
@@ -268,11 +348,12 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
       // requestId 不吻合、甚至全為零的封包。若只認 requestId，那些請求會一路
       // 靜默逾時，呼叫端看到的是「沒反應」而不是真正的失敗原因。
       //
-      // 指令實務上都是循序送出，所以「只剩一個待決請求」時把它歸給該請求，
-      // 比讓它逾時誠實得多。歸屬方式會記進 log，不隱瞞這是推斷來的。
+      // 指令一律排隊逐條送出（見 MAX_QUEUED_COMMANDS），所以「只剩一個待決
+      // 請求」時把它歸給該請求，比讓它逾時誠實得多。歸屬方式會記進 log，
+      // 不隱瞞這是推斷來的。
       // 保活探測不參與這個推斷：它是橋接自己發的，不該去吃掉使用者指令的回應。
       const attributable = [...pending.entries()].filter(([, request]) => !request.internal);
-      if (attributable.length === 1) {
+      if (allowAmbiguousResponse && attributable.length === 1) {
         const soleRequestId = attributable[0]?.[0];
         if (soleRequestId !== undefined) {
           log('info', 'correlated response by sole-pending fallback', {
@@ -288,25 +369,48 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
       log('error', 'unmatched response', {
         purpose,
         pendingCount: pending.size,
+        // 逾時過一次之後這裡一定是 false；診斷時要能分辨「遊戲沒回」與
+        // 「回了但橋接刻意不敢歸屬」。
+        ambiguousFallback: allowAmbiguousResponse,
         statusMessage: body['statusMessage'] ?? null,
       });
       return;
     }
   }
 
-  function dispatch(
+  function sendAndAwait(
     target: WebSocket,
     commandLine: string,
     timeoutMs: number,
-    internal = false,
+    internal: boolean,
+    commandVersion: 1 | 25,
+    onResponse: ((body: Record<string, unknown>, purpose: string) => void) | undefined,
   ): Promise<CommandOutcome> {
-    const requestId = randomUUID();
     const startedAt = Date.now();
+    // 排隊期間遊戲可能已經換連線。舊指令絕不轉送到新遊戲，語意與
+    // failAllPending 一致。
+    if (socket !== target || target.readyState !== 1) {
+      return Promise.resolve({
+        ok: false,
+        commandLine,
+        statusCode: null,
+        statusMessage: '排隊等待送出時遊戲連線已改變；沒有把原指令送到新連線。',
+        data: null,
+        elapsedMs: 0,
+      });
+    }
+
+    const requestId = randomUUID();
     if (!internal) commandsIssued += 1;
 
     return new Promise<CommandOutcome>((resolve) => {
       const timer = setTimeout(() => {
         pending.delete(requestId);
+        if (socket === target) {
+          commandState = 'timed-out';
+          lastCommandTimeoutAt = new Date().toISOString();
+          allowAmbiguousResponse = false;
+        }
         resolve({
           ok: false,
           commandLine,
@@ -318,7 +422,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
       }, timeoutMs);
       timer.unref();
 
-      pending.set(requestId, { commandLine, startedAt, settle: resolve, timer, internal });
+      pending.set(requestId, { commandLine, startedAt, settle: resolve, timer, internal, onResponse });
 
       sendFrame(target, {
         header: {
@@ -328,12 +432,72 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
           messagePurpose: 'commandRequest',
         },
         body: {
-          version: 1,
+          version: commandVersion,
           commandLine,
           origin: { type: 'player' },
         },
       });
     });
+  }
+
+  /**
+   * 排隊送出一條指令。同一時間只有一條指令在遊戲裡飛，理由見
+   * MAX_QUEUED_COMMANDS。
+   *
+   * 排隊本身有期限：等超過這條指令自己的逾時預算就直接回報「未送出」並跳過。
+   * 沒有期限的話，呼叫端那邊早就放棄的指令還是會在幾分鐘後被送進遊戲，變成
+   * 一次沒人預期的世界修改。
+   */
+  function dispatch(
+    target: WebSocket,
+    commandLine: string,
+    timeoutMs: number,
+    internal = false,
+    commandVersion: 1 | 25 = 1,
+    onResponse?: (body: Record<string, unknown>, purpose: string) => void,
+  ): Promise<CommandOutcome> {
+    const enqueuedAt = Date.now();
+    const notSent = (statusMessage: string): CommandOutcome => ({
+      ok: false,
+      commandLine,
+      statusCode: null,
+      statusMessage,
+      data: null,
+      elapsedMs: Date.now() - enqueuedAt,
+    });
+
+    // 佇列屬於某一條 socket session。舊 session 的佇列不能擋住新遊戲的握手，
+    // 舊 callback 也不能去扣新 session 的計數。
+    const owner = commandSession;
+    if (owner === null || owner.socket !== target || !owner.open) {
+      return Promise.resolve(notSent('排隊前遊戲連線已改變；沒有把原指令送到新連線。'));
+    }
+
+    if (owner.queued >= MAX_QUEUED_COMMANDS) {
+      throw new MinecraftBridgeError(
+        'command-queue-full',
+        `已有 ${String(owner.queued)} 條指令排隊等待送出，達到上限 ${String(MAX_QUEUED_COMMANDS)}；這條指令沒有送出。` +
+          '請等前面的指令收斂（可用 mc_status 看 queuedCommands 與 commandState），不要繼續平行送指令。',
+      );
+    }
+
+    const enqueueDeadline = enqueuedAt + timeoutMs;
+    owner.queued += 1;
+    const outcome = owner.chain.then(() => {
+      owner.queued -= 1;
+      if (!owner.open || socket !== target || target.readyState !== 1) {
+        return notSent('排隊等待送出時遊戲連線已改變；沒有把原指令送到新連線。');
+      }
+      if (Date.now() > enqueueDeadline) {
+        return notSent(`排隊等待送出超過 ${String(timeoutMs)} ms，這條指令沒有送出，之後也不會送出。`);
+      }
+      return sendAndAwait(target, commandLine, timeoutMs, internal, commandVersion, onResponse);
+    });
+    owner.chain = outcome.then(
+      () => undefined,
+      () => undefined,
+    );
+    return outcome;
   }
 
   /**
@@ -344,10 +508,41 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
     if (!options.negotiateEncryption) return;
 
     const offer = createEncryptionOffer();
-    const outcome = await dispatch(target, offer.commandLine, ENCRYPTION_TIMEOUT_MS);
+    let installed = false;
+    let installFailure: string | null = null;
 
-    const clientPublicKey = extractPublicKey(outcome.data);
-    if (clientPublicKey === null) {
+    /**
+     * 收到握手回覆的那一刻就把解密器裝上，**不等 await**。
+     *
+     * 遊戲會在握手回覆之後立刻開始加密，而那些訊框常常與回覆落在同一次接收
+     * 裡；ws 會在同一個同步批次把它們 emit 完。若等 `await` 的 microtask 才裝
+     * 解密器，同批後續的訊框會被當明文而 JSON.parse 失敗丟棄，解密器也沒吃到
+     * 那些位元組，於是與遊戲的 CFB8 串流錯開（下一個回覆前 16 bytes 是亂碼）。
+     */
+    const install = (body: Record<string, unknown>, _purpose: string): void => {
+      // 沿用既有握手的公鑰接受條件，不在這次時序修正中改動 messagePurpose
+      // 或 statusCode 的處理方式；不能據此推論遊戲實際會回哪一種格式。
+      if (socket !== target || session !== null) return;
+      const clientPublicKey = extractPublicKey(body);
+      if (clientPublicKey === null) return;
+      try {
+        session = offer.complete(clientPublicKey);
+        installed = true;
+      } catch (error: unknown) {
+        // 公鑰壞掉不是致命錯誤：明文一樣能用，所以只記下原因並維持明文。
+        session = null;
+        installFailure = error instanceof Error ? error.message : String(error);
+      }
+    };
+
+    const outcome = await dispatch(target, offer.commandLine, ENCRYPTION_TIMEOUT_MS, false, 1, install);
+    if (socket !== target || target.readyState !== 1) return;
+
+    if (installFailure !== null) {
+      log('error', 'encryption handshake failed; continuing in plaintext', { detail: installFailure });
+      return;
+    }
+    if (!installed) {
       log('info', 'encryption not negotiated; continuing in plaintext', {
         ok: outcome.ok,
         statusMessage: outcome.statusMessage,
@@ -355,24 +550,14 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
       return;
     }
 
-    try {
-      session = offer.complete(clientPublicKey);
-      log('info', 'websocket encryption enabled', {});
+    log('info', 'websocket encryption enabled', {});
 
-      // 實測（四次獨立執行皆重現）：握手完成後遊戲送出的第一個加密訊框會與
-      // 我們剛裝好的解密器錯位，那一次的回應必定讀不出來。AES-CFB8 會自我
-      // 同步，所以只影響第一條指令——但那代表呼叫端的第一個動作必定逾時。
-      //
-      // 這裡先送一條唯讀指令把那次損失吸收掉，結果直接丟棄。付出一次
-      // round-trip，換到「第一條指令就能用」。
-      const primed = await dispatch(target, 'time query daytime', ENCRYPTION_TIMEOUT_MS);
-      log('info', 'primed post-handshake stream', { absorbedFailure: !primed.ok });
-    } catch (error: unknown) {
-      log('error', 'encryption handshake failed; continuing in plaintext', {
-        detail: error instanceof Error ? error.message : String(error),
-      });
-      session = null;
-    }
+    // 握手後的就緒探測。解密器已經同步裝好，所以這條**不是**用來犧牲第一個
+    // 加密回覆的——它只是在把連線交給呼叫端之前，先確認加密後的來回真的通。
+    // 結果不影響加密狀態：探測失敗仍維持加密，只是記錄下來供診斷。
+    const probe = await dispatch(target, 'time query daytime', ENCRYPTION_TIMEOUT_MS);
+    if (socket !== target || target.readyState !== 1) return;
+    log('info', 'primed post-handshake stream', { ok: probe.ok, elapsedMs: probe.elapsedMs });
   }
 
   function resubscribeAll(target: WebSocket): void {
@@ -410,19 +595,35 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
     for (const waiter of waiters) waiter(status);
   }
 
+  /** 舊佇列整批退休：等在裡面的指令一律回報未送出，且不再扣新 session 的計數。 */
+  function retireCommandSession(): void {
+    if (commandSession === null) return;
+    commandSession.open = false;
+    commandSession = null;
+  }
+
   function attachSocket(next: WebSocket): void {
+    if (socket !== null) failAllPending('舊遊戲連線已被新連線取代；未重送原指令。');
+    retireCommandSession();
     if (socket !== null && socket.readyState === 1) {
       log('info', 'replacing previous connection', {});
       socket.close(1000, 'replaced by newer connection');
     }
 
     socket = next;
+    commandSession = { socket: next, chain: Promise.resolve(), queued: 0, open: true };
     session = null;
+    commandState = 'unknown';
+    lastCommandResponseAt = null;
+    lastCommandTimeoutAt = null;
+    allowAmbiguousResponse = true;
+    keepaliveMisses = 0;
     alive = true;
     connectedAt = new Date().toISOString();
     connectionCount += 1;
 
     next.on('message', (data: Buffer | ArrayBuffer | Buffer[]) => {
+      if (socket !== next) return;
       const payload = Array.isArray(data)
         ? Buffer.concat(data)
         : Buffer.isBuffer(data)
@@ -431,7 +632,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
       handleMessage(payload);
     });
     next.on('pong', () => {
-      alive = true;
+      if (socket === next) alive = true;
     });
     next.on('close', () => {
       if (socket === next) {
@@ -440,6 +641,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
         negotiation = null;
         connectedAt = null;
         failAllPending('Minecraft 連線已中斷。');
+        retireCommandSession();
       }
       log('info', 'minecraft disconnected', {});
     });
@@ -450,10 +652,20 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
     log('info', 'minecraft connected', { connectionCount });
 
     // 握手完成前不通知等待者，否則呼叫端會在加密就緒之前搶跑。
-    negotiation = negotiateEncryption(next).finally(() => {
-      resubscribeAll(next);
-      settleConnectionWaiters(currentStatus());
-    });
+    // 握手失敗絕不能變成 negotiation 的 rejection：readySocket 會 await 它，
+    // 否則之後每一條指令都會拿到握手的錯誤，而且沒人 catch 就是 unhandled
+    // rejection。明文本來就是可用的退路，這裡記錄後繼續。
+    negotiation = negotiateEncryption(next)
+      .catch((error: unknown) => {
+        log('error', 'encryption negotiation aborted; continuing in plaintext', {
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .finally(() => {
+        if (socket !== next || next.readyState !== 1) return;
+        resubscribeAll(next);
+        settleConnectionWaiters(currentStatus());
+      });
   }
 
   return {
@@ -521,9 +733,9 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
         const active = socket;
         if (active === null || active.readyState !== 1) return;
 
-        // 已經有請求在飛：回應本身就會證明活性，而且它各自帶逾時，
+        // 已經有請求在飛或在排隊：回應本身就會證明活性，而且它各自帶逾時，
         // 不需要（也不該）再插一條探測進去攪亂 sole-pending 歸屬。
-        if (pending.size > 0) return;
+        if (pending.size > 0 || (commandSession?.queued ?? 0) > 0) return;
 
         alive = false;
         active.ping(); // 對會回 pong 的客戶端仍然有效，是額外保險而非唯一依據。
@@ -535,8 +747,22 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
           if (socket !== active) return;
           // handleMessage 收到任何封包都會把 alive 設回 true，
           // 所以 alive 仍是 false 代表整段探測期間遊戲一個字都沒回。
-          if (alive) return;
-          log('error', 'keepalive unanswered, terminating socket', {});
+          if (alive) {
+            keepaliveMisses = 0;
+            return;
+          }
+          keepaliveMisses += 1;
+          if (keepaliveMisses < KEEPALIVE_MISS_LIMIT) {
+            // 可能只是暫時沒有處理指令；目前不足以證明連線已失效。
+            log('error', 'keepalive unanswered; keeping the socket', {
+              misses: keepaliveMisses,
+              limit: KEEPALIVE_MISS_LIMIT,
+            });
+            return;
+          }
+          log('error', 'keepalive unanswered repeatedly, terminating socket', {
+            misses: keepaliveMisses,
+          });
           active.terminate();
         });
       }, keepaliveIntervalMs);
@@ -556,6 +782,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
         heartbeat = null;
       }
       failAllPending('MCP server 正在關閉。');
+      retireCommandSession();
 
       const active = server;
       server = null;
@@ -627,9 +854,8 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
       });
     },
 
-    async runCommand(commandLine: string): Promise<CommandOutcome> {
-      if (negotiation !== null) await negotiation;
-      return await dispatch(requireSocket(), commandLine, options.commandTimeoutMs);
+    async runCommand(commandLine: string, commandOptions?: CommandOptions): Promise<CommandOutcome> {
+      return await dispatch(await readySocket(), commandLine, options.commandTimeoutMs, false, commandOptions?.commandVersion ?? 1);
     },
 
     async runSequence(
@@ -637,14 +863,18 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
       sequenceOptions: SequenceOptions,
     ): Promise<BatchOutcome> {
       const startedAt = Date.now();
+      const sequenceSocket = socket;
       const outcomes: CommandOutcome[] = [];
       let firstFailure: CommandOutcome | null = null;
 
       for (const [index, commandLine] of commandLines.entries()) {
+        if (socket !== sequenceSocket) {
+          throw new MinecraftBridgeError('connection-changed', '批次執行期間遊戲連線已改變；其餘指令未送出。');
+        }
         const outcome = await this.runCommand(commandLine);
         outcomes.push(outcome);
         if (!outcome.ok && firstFailure === null) firstFailure = outcome;
-        if (!outcome.ok && sequenceOptions.stopOnError) break;
+        if (!outcome.ok && (sequenceOptions.stopOnError || outcome.statusCode === null || socket !== sequenceSocket)) break;
         if (sequenceOptions.delayMs > 0 && index < commandLines.length - 1) {
           await new Promise<void>((resolve) => {
             const timer = setTimeout(resolve, sequenceOptions.delayMs);
@@ -666,8 +896,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
     },
 
     async subscribe(eventName: string): Promise<void> {
-      if (negotiation !== null) await negotiation;
-      const active = requireSocket();
+      const active = await readySocket();
       subscribed.add(eventName);
       sendFrame(active, {
         header: {
@@ -681,8 +910,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
     },
 
     async unsubscribe(eventName: string): Promise<void> {
-      if (negotiation !== null) await negotiation;
-      const active = requireSocket();
+      const active = await readySocket();
       subscribed.delete(eventName);
       sendFrame(active, {
         header: {

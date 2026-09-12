@@ -27,6 +27,7 @@ const CONFIG = {
   stepDelayMs: 0,
   debugFrames: false,
   negotiateEncryption: false,
+  undoEnabled: false,
 };
 
 async function connect(fake: FakeConnection): Promise<Client> {
@@ -96,10 +97,12 @@ describe('MCP 工具面', () => {
       'mc_teleport',
       'mc_test_block',
       'mc_ticking_area',
+      'mc_undo',
+      'mc_undo_control',
       'mc_verify_reading',
       'mc_world_settings',
     ]);
-    expect(names).toHaveLength(42);
+    expect(names).toHaveLength(44);
   });
 
   it('mc_status 回報連線資訊', async () => {

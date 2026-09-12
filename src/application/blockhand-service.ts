@@ -127,6 +127,7 @@ export function parseQueryTargetDetails(outcome: CommandOutcome): unknown {
 }
 
 export interface BlockHandServiceOptions {
+  readonly undo?: import('../domain/undo.js').UndoController;
   readonly version: string;
   readonly defaultStepDelayMs: number;
 }
@@ -139,6 +140,7 @@ export function createBlockHandService(
 
   return {
     version: options.version,
+    undo: options.undo,
 
     /**
      * 本次連線存過的結構。遊戲沒有「列出已存結構」的指令，所以 AI 反覆修改

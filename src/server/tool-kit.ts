@@ -54,6 +54,7 @@ export function outcomeToPayload(outcome: CommandOutcome): Record<string, unknow
     statusMessage: outcome.statusMessage,
     data: outcome.data,
     elapsedMs: outcome.elapsedMs,
+    ...(outcome.undo ? { undo: { ...outcome.undo } } : {}),
   };
 }
 
@@ -66,22 +67,25 @@ export function batchToPayload(batch: BatchOutcome): Record<string, unknown> {
     firstFailure: batch.firstFailure === null ? null : outcomeToPayload(batch.firstFailure),
     outcomes: batch.outcomes.map(outcomeToPayload),
     elapsedMs: batch.elapsedMs,
+    ...(batch.undo ? { undo: { ...batch.undo } } : {}),
   };
 }
 
 export function summarizeOutcome(outcome: CommandOutcome): string {
+  const undoNote=outcome.undo ? ` ${outcome.undo.reason ?? ''}（備份 ${outcome.undo.storedBlocks} 格／${outcome.undo.snapshotCount} 區）` : '';
   if (outcome.ok) {
-    return outcome.statusMessage ?? `已執行：${outcome.commandLine}`;
+    return (outcome.statusMessage ?? `已執行：${outcome.commandLine}`)+undoNote;
   }
-  return `失敗：${outcome.commandLine}｜${outcome.statusMessage ?? '遊戲沒有回報原因'}`;
+  return `失敗：${outcome.commandLine}｜${outcome.statusMessage ?? '遊戲沒有回報原因'}`+undoNote;
 }
 
 export function summarizeBatch(batch: BatchOutcome, label: string): string {
+  const undoNote=batch.undo ? ` ${batch.undo.reason ?? ''}（備份 ${batch.undo.storedBlocks} 格／${batch.undo.snapshotCount} 區）` : '';
   if (batch.ok) {
-    return `${label}：${String(batch.succeeded)} 條指令全部成功，用時 ${String(batch.elapsedMs)} ms。`;
+    return `${label}：${String(batch.succeeded)} 條指令全部成功，用時 ${String(batch.elapsedMs)} ms。`+undoNote;
   }
   const reason = batch.firstFailure?.statusMessage ?? '遊戲沒有回報原因';
-  return `${label}：${String(batch.succeeded)}/${String(batch.issued)} 成功，${String(batch.failed)} 失敗。首個失敗：${batch.firstFailure?.commandLine ?? '未知'}｜${reason}`;
+  return `${label}：${String(batch.succeeded)}/${String(batch.issued)} 成功，${String(batch.failed)} 失敗。首個失敗：${batch.firstFailure?.commandLine ?? '未知'}｜${reason}`+undoNote;
 }
 
 /** zod 已經套用 mode 預設值，這裡只是把形狀轉成領域型別。 */

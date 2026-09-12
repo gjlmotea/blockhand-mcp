@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import type { BlockHandService } from '../application/blockhand-service.js';
 import type { BuildService } from '../application/build-service.js';
+import { DEFAULT_UNDO_BLOCKS } from '../domain/build/undo-plan.js';
 import { registerResources } from './register-resources.js';
 import { registerTools } from './register-tools.js';
 
@@ -21,6 +22,9 @@ export function createMcpServer(options: {
         '世界必須開啟作弊（Cheats），否則所有 slash 指令都會被遊戲拒絕。',
         '動手之前先看：用 mc_query_target 取得玩家座標，用 mc_agent_sense 看 Agent 前方，用 mc_build_preview 確認方塊數與範圍。',
         '大量方塊一律走 mc_build_shape 或 mc_build_blueprint，它們會把座標合併成最少的 fill；不要用迴圈逐格呼叫 mc_set_block。',
+        `預設自動 Undo 保留一個操作、最多 ${DEFAULT_UNDO_BLOCKS} 格；同材質連續範圍合併整區備份與比對。僅支援主世界的絕對整數座標及基本靜態建材；整個建造工具或純 setblock/fill 批次算一步。超量或不支援的建造會在施工前拒絕。`,
+        '用 mc_undo_control 查看或調整狀態，mc_undo 復原；大型建造請先說明無自動復原，再停用自動備份。其他未追蹤的修改會清除舊還原點。',
+        'Undo 有衝突、失敗或斷線時先查看現場與狀態，不自動重送、不自行啟用 overwriteChanges；只有使用者明確接受覆蓋現況才可強制復原。施工與復原時請留在原維度。',
         'Agent 的方向是相對它自己的面向，不是世界方位；連續動作請用 mc_agent_program 一次送出。',
         'mc_run_command 是沒有專用工具時的後備，只接受單行指令，且永遠拒絕 wsserver／connect（那會切斷本橋接）。',
         '讀方塊靠遊戲錯誤訊息的文字格式，遊戲改版或換語言就會失效。行為變得可疑時（讀不出方塊、結果與畫面不符）先呼叫 mc_verify_reading 判斷是不是協定漂移，不要當成「那裡是空的」繼續推論。',

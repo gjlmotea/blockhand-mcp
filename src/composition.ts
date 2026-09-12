@@ -1,9 +1,13 @@
 import { createWsMinecraftConnection } from './adapters/ws-minecraft-connection.js';
 import { createBlockHandService } from './application/blockhand-service.js';
 import { createBuildService } from './application/build-service.js';
+import { createUndoConnection } from './application/undo-service.js';
+import { DEFAULT_UNDO_BLOCKS, MAX_UNDO_BLOCKS } from './domain/build/undo-plan.js';
 import type { MinecraftConnection } from './ports/minecraft-connection.js';
 
 export interface RuntimeConfig {
+  readonly undoEnabled?: boolean;
+  readonly maxUndoBlocks?: number;
   readonly host: string;
   readonly port: number;
   readonly fallbackToRandomPort: boolean;
@@ -40,6 +44,8 @@ function readInt(name: string, fallback: number, min: number, max: number): numb
 export function readRuntimeConfig(): RuntimeConfig {
   const host = process.env['MINECRAFT_EDU_WS_HOST']?.trim();
   return {
+    undoEnabled: process.env['MINECRAFT_EDU_UNDO_ENABLED'] !== '0',
+    maxUndoBlocks: readInt('MINECRAFT_EDU_UNDO_MAX_BLOCKS', DEFAULT_UNDO_BLOCKS, 1, MAX_UNDO_BLOCKS),
     host: host === undefined || host === '' ? DEFAULTS.host : host,
     // 0 是 Node 的正式語意：請作業系統配發空閒埠。一般使用仍預設 19131，
     // doctor／隔離 smoke 可明確設 0，避免碰到使用中的 MCP task。
@@ -78,12 +84,17 @@ export function composeRuntime(version: string, config: RuntimeConfig, connectio
       negotiateEncryption: config.negotiateEncryption,
     });
 
-  const service = createBlockHandService(activeConnection, {
+  const protectedWorld = createUndoConnection(activeConnection, {
+    enabled: config.undoEnabled ?? true,
+    maxBlocks: config.maxUndoBlocks ?? DEFAULT_UNDO_BLOCKS,
+  });
+  const service = createBlockHandService(protectedWorld.connection, {
     version,
     defaultStepDelayMs: config.stepDelayMs,
+    undo: protectedWorld.undo,
   });
 
-  const build = createBuildService(activeConnection, { maxBuildBlocks: config.maxBuildBlocks });
+  const build = createBuildService(protectedWorld.connection, { maxBuildBlocks: config.maxBuildBlocks });
 
-  return { connection: activeConnection, service, build };
+  return { connection: protectedWorld.connection, service, build };
 }

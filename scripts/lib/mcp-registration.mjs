@@ -14,6 +14,8 @@ const ALLOWED_ENV_NAMES = new Set([
   'MINECRAFT_EDU_COMMAND_TIMEOUT_MS',
   'MINECRAFT_EDU_EVENT_BUFFER',
   'MINECRAFT_EDU_MAX_BUILD_BLOCKS',
+  'MINECRAFT_EDU_UNDO_ENABLED',
+  'MINECRAFT_EDU_UNDO_MAX_BLOCKS',
   'MINECRAFT_EDU_STEP_DELAY_MS',
   'MINECRAFT_EDU_DEBUG_FRAMES',
   'MINECRAFT_EDU_ENCRYPTION',
@@ -164,4 +166,3 @@ export function classifyRegistration(
     differences: describeDifferences(entry, desired, currentPaths, registeredNodeUsable),
   };
 }
-

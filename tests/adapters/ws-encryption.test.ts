@@ -14,8 +14,10 @@ import {
   generateKeyPairSync,
 } from 'node:crypto';
 
+import { createRequire } from 'node:module';
+
 import { WebSocket } from 'ws';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createWsMinecraftConnection } from '../../src/adapters/ws-minecraft-connection.js';
 import { createEncryptionOffer, extractPublicKey } from '../../src/adapters/ws-encryption.js';
@@ -31,8 +33,77 @@ afterEach(async () => {
   active = null;
 });
 
+/**
+ * 把多個 WebSocket 訊框併成單一 TCP write。
+ *
+ * 這是重現實機時序的關鍵：遊戲的明文握手回覆與緊接著的加密訊框會落在同一次
+ * 接收裡，接收端的 ws Receiver 會在同一個同步批次中連續 emit 多個 message。
+ * 使用 ws 自己的 framing 產生訊框，再合併成一次底層 socket write，避免依賴
+ * 多次 send 恰好合併。TCP 不保證 write 與 read 邊界一致；測試使用本機連線
+ * 驗證此接收情境，保留真正的加密與遮罩處理。
+ */
+interface WsFramer {
+  frame(
+    data: Buffer,
+    options: {
+      readonly fin: boolean;
+      readonly rsv1: boolean;
+      readonly opcode: number;
+      readonly mask: boolean;
+      readonly readOnly: boolean;
+    },
+  ): Buffer[];
+}
+const { Sender } = createRequire(import.meta.url)('ws') as { Sender: WsFramer };
+
+function writeOneBatch(
+  socket: WebSocket,
+  frames: readonly { readonly data: Buffer; readonly binary: boolean }[],
+): void {
+  const chunks: Buffer[] = [];
+  for (const { data, binary } of frames) {
+    chunks.push(
+      ...Sender.frame(data, {
+        fin: true,
+        rsv1: false,
+        opcode: binary ? 0x2 : 0x1,
+        mask: true,
+        readOnly: false,
+      }),
+    );
+  }
+  const transport = (socket as unknown as { readonly _socket: { write(chunk: Buffer): void } })._socket;
+  transport.write(Buffer.concat(chunks));
+}
+
+/** 遊戲端的 ECDH：與 attachFakeGame 相同，只是把訊框交給呼叫端決定怎麼送。 */
+function completeGameSideHandshake(commandLine: string): {
+  readonly publicKey: string;
+  readonly cipher: ReturnType<typeof createCipheriv>;
+  readonly decipher: ReturnType<typeof createDecipheriv>;
+} {
+  const unquote = (value: string | undefined): string => (value ?? '').replace(/^"|"$/g, '');
+  const [, rawPublicKey, rawSalt] = commandLine.split(' ');
+  const serverKey = createPublicKey({
+    key: Buffer.from(unquote(rawPublicKey), 'base64'),
+    format: 'der',
+    type: 'spki',
+  });
+  const own = generateKeyPairSync('ec', { namedCurve: 'secp384r1' });
+  const shared = diffieHellman({ privateKey: own.privateKey, publicKey: serverKey });
+  const secret = createHash('sha256')
+    .update(Buffer.concat([Buffer.from(unquote(rawSalt), 'base64'), shared]))
+    .digest();
+  const iv = secret.subarray(0, 16);
+  return {
+    publicKey: own.publicKey.export({ type: 'spki', format: 'der' }).toString('base64'),
+    cipher: createCipheriv('aes-256-cfb8', secret, iv),
+    decipher: createDecipheriv('aes-256-cfb8', secret, iv),
+  };
+}
+
 /** 模擬遊戲端：完成握手，之後所有收發都加密。 */
-function attachFakeGame(socket: WebSocket): void {
+function attachFakeGame(socket: WebSocket, intercept?: (command: string, reply: () => void) => boolean): void {
   let cipher: ReturnType<typeof createCipheriv> | null = null;
   let decipher: ReturnType<typeof createDecipheriv> | null = null;
 
@@ -81,10 +152,11 @@ function attachFakeGame(socket: WebSocket): void {
       return;
     }
 
-    send({
+    const reply = (): void => send({
       header: { version: 1, requestId: frame.header.requestId, messagePurpose: 'commandResponse' },
       body: { statusCode: 0, statusMessage: `ran ${commandLine}` },
     });
+    if (!intercept?.(commandLine, reply)) reply();
   });
 }
 
@@ -118,7 +190,265 @@ async function startEncryptedHarness(): Promise<MinecraftConnection> {
   return connection;
 }
 
+/**
+ * 遊戲端：把明文握手回覆與緊接著的加密事件訊框併在同一次 TCP write 送出，
+ * 之後一切收發都加密。
+ */
+function attachCoalescingGame(socket: WebSocket, seen: string[], events: readonly string[]): void {
+  let cipher: ReturnType<typeof createCipheriv> | null = null;
+  let decipher: ReturnType<typeof createDecipheriv> | null = null;
+
+  socket.on('message', (data: Buffer) => {
+    const raw = decipher === null ? data.toString('utf8') : decipher.update(data).toString('utf8');
+    const frame = JSON.parse(raw) as {
+      header: { requestId: string; messagePurpose: string };
+      body: { commandLine?: string };
+    };
+    if (frame.header.messagePurpose !== 'commandRequest') return;
+    const commandLine = frame.body.commandLine ?? '';
+    seen.push(commandLine);
+
+    if (commandLine.startsWith('enableencryption ')) {
+      const negotiated = completeGameSideHandshake(commandLine);
+      cipher = negotiated.cipher;
+      decipher = negotiated.decipher;
+      const handshake = Buffer.from(
+        JSON.stringify({
+          header: { version: 1, requestId: frame.header.requestId, messagePurpose: 'commandResponse' },
+          body: { statusCode: 0, publicKey: negotiated.publicKey },
+        }),
+        'utf8',
+      );
+      const encrypted = (message: string): Buffer =>
+        negotiated.cipher.update(
+          Buffer.from(
+            JSON.stringify({
+              header: { eventName: 'PlayerMessage', messagePurpose: 'event', version: 17_104_896 },
+              body: { message, sender: '教師', type: 'say' },
+            }),
+            'utf8',
+          ),
+        );
+      writeOneBatch(socket, [
+        { data: handshake, binary: false },
+        ...events.map((message) => ({ data: encrypted(message), binary: true })),
+      ]);
+      return;
+    }
+
+    const json = JSON.stringify({
+      header: { version: 1, requestId: frame.header.requestId, messagePurpose: 'commandResponse' },
+      body: { statusCode: 0, statusMessage: `ran ${commandLine}` },
+    });
+    socket.send(cipher === null ? json : cipher.update(Buffer.from(json, 'utf8')));
+  });
+}
+
+/** 遊戲端：握手只回明文，永不加密。用來驗退回明文的邊界。 */
+function attachPlaintextOnlyGame(socket: WebSocket, handshakeBody: Record<string, unknown>, purpose: string): void {
+  socket.on('message', (data: Buffer) => {
+    const frame = JSON.parse(data.toString('utf8')) as {
+      header: { requestId: string; messagePurpose: string };
+      body: { commandLine?: string };
+    };
+    if (frame.header.messagePurpose !== 'commandRequest') return;
+    const commandLine = frame.body.commandLine ?? '';
+    const isHandshake = commandLine.startsWith('enableencryption ');
+    socket.send(
+      JSON.stringify({
+        header: {
+          version: 1,
+          requestId: frame.header.requestId,
+          messagePurpose: isHandshake ? purpose : 'commandResponse',
+        },
+        body: isHandshake ? handshakeBody : { statusCode: 0, statusMessage: `ran ${commandLine}` },
+      }),
+    );
+  });
+}
+
+async function startWith(
+  attach: (socket: WebSocket) => void,
+  commandTimeoutMs = 2000,
+): Promise<MinecraftConnection> {
+  const connection = createWsMinecraftConnection({
+    host: '127.0.0.1',
+    port: 0,
+    fallbackToRandomPort: false,
+    commandTimeoutMs,
+    eventBufferSize: 20,
+    debugFrames: false,
+    negotiateEncryption: true,
+  });
+  active = connection;
+  await connection.start();
+  const socket = new WebSocket(`ws://127.0.0.1:${String(connection.status().port)}`);
+  client = socket;
+  attach(socket);
+  await new Promise<void>((resolve, reject) => {
+    socket.once('open', () => { resolve(); });
+    socket.once('error', reject);
+  });
+  return connection;
+}
+
+describe('加密握手的同批接收', () => {
+  /**
+   * 回歸：舊實作在 `await dispatch(...)` 的 microtask 才安裝 session，而 ws 會在
+   * 同一個同步批次裡把後續訊框 emit 完。那些已加密的訊框因此被當明文處理、
+   * JSON.parse 失敗而丟棄（實機 log 的 `received non-JSON frame`），解密器也沒有
+   * 吃掉那些位元組，於是與遊戲的串流錯開——下一個回覆的前 16 bytes 是亂碼
+   * （AES-CFB8 在 16 bytes 後自我同步），primer 因此逾時。
+   */
+  it('握手回覆與加密訊框同批到達時不丟事件、不錯開串流、primer 不逾時', async () => {
+    const seen: string[] = [];
+    const connection = await startWith((socket) =>
+      { attachCoalescingGame(socket, seen, ['coalesced-1', 'coalesced-2']); });
+
+    const status = await connection.awaitConnection(8000);
+    expect(status.encrypted).toBe(true);
+
+    // 同批裡的加密事件必須完整保留。
+    const page = connection.readEvents(0, 10, null);
+    expect(page.events.map((event) => event.properties['message'])).toEqual(['coalesced-1', 'coalesced-2']);
+
+    // 解密器必須在處理下一個訊框之前就裝好，所以 primer 不該逾時。
+    expect(connection.status()).toMatchObject({ commandState: 'responsive', lastCommandTimeoutAt: null });
+    expect(seen).toContain('time query daytime');
+
+    // 呼叫端的第一條指令直接可用。
+    await expect(connection.runCommand('say hello')).resolves.toMatchObject({
+      ok: true,
+      statusMessage: 'ran say hello',
+    });
+  }, 20_000);
+
+  it('公鑰無法解析時退回明文，不丟例外也不影響後續指令', async () => {
+    const connection = await startWith((socket) =>
+      { attachPlaintextOnlyGame(socket, { statusCode: 0, publicKey: 'not-a-key' }, 'commandResponse'); });
+
+    const status = await connection.awaitConnection(8000);
+    expect(status).toMatchObject({ connected: true, encrypted: false });
+    await expect(connection.runCommand('say hello')).resolves.toMatchObject({
+      ok: true,
+      statusMessage: 'ran say hello',
+    });
+  }, 20_000);
+
+  it('握手被回 error 時退回明文，不丟例外也不影響後續指令', async () => {
+    const connection = await startWith((socket) =>
+      { attachPlaintextOnlyGame(socket, { statusCode: -2_147_483_648, statusMessage: 'syntax error' }, 'error'); });
+
+    const status = await connection.awaitConnection(8000);
+    expect(status).toMatchObject({ connected: true, encrypted: false });
+    await expect(connection.runCommand('say hello')).resolves.toMatchObject({
+      ok: true,
+      statusMessage: 'ran say hello',
+    });
+  }, 20_000);
+});
+
 describe('websocket 加密握手', () => {
+  it('does not replay a command waiting for an old handshake onto a replacement game', async () => {
+    const connection = createWsMinecraftConnection({ host: '127.0.0.1', port: 0,
+      fallbackToRandomPort: false, commandTimeoutMs: 1000, eventBufferSize: 20,
+      debugFrames: false, negotiateEncryption: true });
+    active = connection;
+    await connection.start();
+    const address = `ws://127.0.0.1:${connection.status().port}`;
+    const old = new WebSocket(address);
+    client = old;
+    let priming!: () => void;
+    const primerSeen = new Promise<void>(resolve => { priming = resolve; });
+    attachFakeGame(old, command => {
+      if (command !== 'time query daytime') return false;
+      priming(); return true;
+    });
+    await primerSeen;
+    const rejected = expect(connection.runCommand('say must-not-replay')).rejects.toThrow('連線已改變');
+    const replacement = new WebSocket(address);
+    client = replacement;
+    const received: string[] = [];
+    attachFakeGame(replacement, command => { received.push(command); return false; });
+    await new Promise<void>((resolve, reject) => {
+      replacement.once('open', resolve); replacement.once('error', reject);
+    });
+    await rejected;
+    await connection.awaitConnection(2000);
+    expect(connection.status().encrypted).toBe(true);
+    expect((await connection.runCommand('time query daytime')).ok).toBe(true);
+    expect(received).not.toContain('say must-not-replay');
+    old.terminate();
+  });
+
+  /**
+   * 回歸：舊遊戲把送出佇列塞滿（一條在飛 + 64 條排隊）之後，新遊戲連進來。
+   * 佇列若屬於整個橋接而不是某一條 socket，新連線的 `enableencryption` 就會被
+   * command-queue-full 擋掉——握手根本沒發出去，那個錯誤又變成沒人接的
+   * rejection，結果是「連上了但一條指令都不會動」。
+   */
+  it('舊連線塞滿的佇列不會擋住新遊戲的握手', async () => {
+    const connection = createWsMinecraftConnection({ host: '127.0.0.1', port: 0,
+      fallbackToRandomPort: false, commandTimeoutMs: 1000, eventBufferSize: 20,
+      debugFrames: false, negotiateEncryption: true });
+    active = connection;
+    await connection.start();
+    const address = `ws://127.0.0.1:${String(connection.status().port)}`;
+
+    // 舊遊戲：握手與 primer 正常，之後所有指令一律不回覆。
+    const old = new WebSocket(address);
+    client = old;
+    let primed!: () => void;
+    const oldReady = new Promise<void>((resolve) => { primed = resolve; });
+    let seenPrimer = false;
+    attachFakeGame(old, (command, reply) => {
+      if (!seenPrimer && command === 'time query daytime') {
+        seenPrimer = true;
+        reply();
+        primed();
+        return true;
+      }
+      return true;
+    });
+    await oldReady;
+    await connection.awaitConnection(4000);
+    expect(connection.status().encrypted).toBe(true);
+
+    // 一條在飛 + 64 條排隊 = 佇列已滿。
+    const stalled = Array.from({ length: 64 }, (_unused, index) =>
+      connection.runCommand(`testforblock 0 ${String(20 + index)} 0 air`));
+    await vi.waitFor(() =>
+      expect(connection.status()).toMatchObject({ inFlightCommands: 1, queuedCommands: 63 }));
+    // runCommand 先 await 握手才進佇列，所以計數要等一個 tick 才看得到。
+    stalled.push(connection.runCommand('testforblock 0 200 0 air'));
+    await vi.waitFor(() =>
+      expect(connection.status()).toMatchObject({ inFlightCommands: 1, queuedCommands: 64 }));
+    await expect(connection.runCommand('say overflow')).rejects.toThrow(/上限/);
+
+    const replacement = new WebSocket(address);
+    client = replacement;
+    const received: string[] = [];
+    attachFakeGame(replacement, (command) => { received.push(command); return false; });
+    await new Promise<void>((resolve, reject) => {
+      replacement.once('open', resolve); replacement.once('error', reject);
+    });
+
+    // 新 session 必須拿到一條空佇列，握手立刻發得出去。
+    const status = await connection.awaitConnection(4000);
+    expect(status).toMatchObject({ connected: true, encrypted: true, queuedCommands: 0 });
+    expect(received).toContain('time query daytime');
+
+    // 舊工作全部回報未送出，而且一條都沒有流進新遊戲。
+    const settled = await Promise.all(stalled);
+    expect(settled.every((outcome) => !outcome.ok)).toBe(true);
+    expect(received.some((command) => command.startsWith('testforblock'))).toBe(false);
+    expect(connection.status().queuedCommands).toBe(0);
+
+    // 新連線本身完全可用。
+    expect((await connection.runCommand('say after-replacement')).ok).toBe(true);
+    old.terminate();
+  }, 20_000);
+
   it('握手完成後 status 回報 encrypted=true', async () => {
     const connection = await startEncryptedHarness();
     expect(connection.status().encrypted).toBe(true);

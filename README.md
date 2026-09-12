@@ -4,8 +4,8 @@
 
 透過 Minecraft Education 官方文件化的 `/wsserver` 連線命令（`/connect` 是 alias）操作，不注入行程、不改遊戲檔案、不用畫面辨識。連線命令是官方介面；後續 WebSocket 訊息協定並沒有公開穩定性保證，因此遊戲改版後仍需重新驗證。
 
-- 42 個工具、2 份 resource
-- 216 項單元與整合測試、1 支不需開遊戲的 stdio／程序生命週期 smoke、1 支真機 live 驗證
+- 44 個工具、2 份 resource
+- 單元與整合測試、1 支不需開遊戲的 stdio／程序生命週期 smoke、1 支真機 live 驗證
 - 不需要任何帳號、token 或祕密；MCP runtime 只綁 loopback，不寫遊戲檔或 artifact
 
 ---
@@ -56,7 +56,7 @@ corepack pnpm run doctor          # 加 --client=claude 等可診斷其他家
 安裝器不是只把指令寫進設定檔，它會：
 
 - **自動填入這台機器的絕對 Node 路徑**，不依賴桌面程式能否讀到 nvm、Homebrew 或 shell PATH。
-- **先跑一次真正的 MCP initialize**（用即將寫入的 command／args／env），確認 42 個工具都在，才動任何持久設定。舊 dist、錯誤 launcher、不可執行的 Node 都會在寫入之前就失敗。
+- **先跑一次真正的 MCP initialize**（用即將寫入的 command／args／env），確認 44 個工具都在，才動任何持久設定。舊 dist、錯誤 launcher、不可執行的 Node 都會在寫入之前就失敗。
 - **已正確登記時什麼都不做**，重跑安全。
 - **同名但不相容時停下並列出差異**，不自動 remove/add，避免覆寫別人的 timeout、tool policy 或另一個 clone 的設定。
 - **只透過各家官方 `mcp add`／`mcp remove` 子指令寫入**，不手改設定檔——那會繞過各家自己的 schema 驗證與 scope 解析。
@@ -172,6 +172,28 @@ corepack pnpm run connect
 
 ---
 
+## 長時間建築：常駐工作階段
+
+AI 沒有直接載入 Minecraft 工具時，可在持續存活的終端／PTY 執行以下客戶端。它透過 stdio 啟動 BlockHand，顯示該工作階段的 `connectCommand`；遊戲連上後才送建築指令。checkpoint 使用新的系統暫存路徑，不放進 Git。
+
+```bash
+node scripts/session-client.mjs --state /你的系統暫存目錄/build-checkpoint.json
+```
+
+每行輸入一個 JSON 請求：
+
+```json
+{"action":"call","name":"mc_status"}
+{"action":"run","commandsFile":"/你的系統暫存目錄/commands.json"}
+{"action":"status"}
+```
+
+`commands.json` 是字串陣列，例如 `["fill 0 40 0 2 42 2 glass"]`；座標必須換成已確認可施工的範圍。也可直接傳 `{"action":"run","commands":["time query daytime"]}`。`run` 立即回覆受理，背景逐條送指令，每條確認後原子更新 checkpoint；`status` 隨時回報 `nextIndex` 與 `inFlight`，不等待整棟建築。
+
+工具呼叫停止等待，工作仍可在該終端繼續；**終端本身必須保持存活**。不要在會隨執行逾時重設的 REPL 中擁有 MCP 子程序，也不要把多個慢批次包進同一個短逾時呼叫。終端關閉／stdin EOF 時伺服器仍會正常退出並釋放埠，避免殘留程序佔用連線。
+
+指令失敗或回覆不確定時佇列停止，不自動重送。若程序中途結束，先依 checkpoint 的 `inFlight` 回讀現場；確認該條是否生效後，另存剩餘指令與新的 checkpoint 再續作。尤其召喚生物等指令不能直接重播。空閒時用 `{"action":"close"}` 正常結束；這會斷開該工作階段的遊戲連線。
+
 ## 2. 真機驗證
 
 先做不開遊戲的安全診斷：
@@ -182,7 +204,7 @@ corepack pnpm run doctor
 corepack pnpm blockhand doctor --json
 ```
 
-doctor 不修改持久設定、不啟動 Minecraft；它會短暫建立隔離的 loopback socket，驗證 launcher、42 tools、2 resources、stdio EOF、監聽埠釋放，並以 Codex **實際登記的 command／args／env** 再完成一次 initialize，避免設定指向失效 Node 卻假綠。
+doctor 不修改持久設定、不啟動 Minecraft；它會短暫建立隔離的 loopback socket，驗證 launcher、44 tools、2 resources、stdio EOF、監聽埠釋放，並以 Codex **實際登記的 command／args／env** 再完成一次 initialize，避免設定指向失效 Node 卻假綠。
 
 遊戲開著、世界已載入、作弊已開之後：
 
@@ -238,6 +260,8 @@ cd gjlmotea/vibe/mcp/minecraft-edu && corepack pnpm run verify
 | 工具 | 用途 |
 |---|---|
 | `mc_status` | 橋接狀態、連線指令、已訂閱事件、累計指令數。任何失敗先查這個 |
+| `mc_undo_control` | 查看、清除或設定自動單步備份；預設開啟、4,096 格、遊戲記憶體 |
+| `mc_undo` | 復原上一筆受保護的建造，先檢查方塊衝突；無 Redo |
 | `mc_await_connection` | 阻塞等待遊戲連入（單次上限 120 秒） |
 | `mc_run_command` | 單行 raw slash 指令；沒有專用工具時的後備 |
 | `mc_run_commands` | 依序執行多條 raw 指令 |
@@ -286,6 +310,36 @@ Agent 方向是**相對它自己的面向**，不是世界方位。
 
 要逐格讀整片區域請走行為包與 Script API；本專案刻意不走那條路，因為那會讓學校電腦多一道安裝步驟。
 
+
+### 自動單步 Undo
+
+預設開啟，只保留**一個操作、最多 4,096 格**的施工前原貌。方塊快照用遊戲的 `structure save ... memory`，不寫磁碟；MCP 合併連續同材質的預期結果，只保存區域邊界、材質與快照名稱，不逐格展開紀錄。開始下一筆前先刪除上一筆快照，不累積歷史；沒有 Redo。
+
+```json
+{"name":"mc_undo_control","arguments":{"action":"status"}}
+{"name":"mc_undo","arguments":{}}
+{"name":"mc_undo_control","arguments":{"action":"configure","maxBlocks":32}}
+{"name":"mc_undo_control","arguments":{"action":"configure","enabled":false}}
+{"name":"mc_undo_control","arguments":{"action":"configure","enabled":true}}
+{"name":"mc_undo_control","arguments":{"action":"clear"}}
+```
+
+- `mc_set_block`、`mc_fill`、`mc_build_shape`、`mc_build_blueprint`，以及純 `setblock`／`fill` 的 raw 批次，共用同一份歷史。一次完整工具呼叫算一步，不是每條底層指令各算一步。獨立呼叫多次只保留最後一次。
+- 第一版限**主世界、絕對整數座標、基本靜態建材及預設方塊資料**。支援 `replace`、`hollow`、`outline`；不支援自訂 blockStates、`keep`、`destroy`、條件 replace、相對座標或混入其他指令的建造批次。基本建材清單見 [undo-plan.ts](src/domain/build/undo-plan.ts)。
+- 超量、太零散或不支援的建造會在施工前拒絕，保留原還原點。大型建造可先停用自動 Undo，沿用既有功能，並視需要手動保存結構。**其他未追蹤的修改指令會清除舊歷史**；純讀取不會。若上一筆處於失敗待處理狀態，新修改也會先停下來。
+- 最多 64 個備份區，每區各邊最多 32 格；可調整總格數到 1–32,768。連續同材質的 16×16×16 區域只需一份快照；混合建材、空心或零散修改可能拆成多區。保存的是精確修改範圍，不會把兩個相隔很遠的方塊中間全部備份。單條 `fill` 的外框體積仍須在格數預算內，包括 `outline`。
+- 備份全部成功後才施工；備份失敗不送出任何施工指令。施工與還原逐條確認，遇到不確定回覆就停止，不自動重試。已確認還原的區域不會再次還原。連線更換會讓舊歷史失效；維度變更則須回到原維度才能操作。
+- 一般 Undo 先由遊戲檢查所有備份區，再於各區的同一條遊戲指令內重新檢查並還原。檢查一個基準方塊，再沿三軸比對相鄰切片，涵蓋整區內部與方塊資料，不需要在世界放置比對副本。後續方塊種類或資料改變時會停止；**這不是整個世界的交易**，也無法辨認改過又變回相同資料的方塊。執行期間不要切換世界／維度。`overwriteChanges:true` 會略過衝突檢查，僅供使用者明確接受覆蓋現況後的復原。
+- 每次連線第一次受保護的建造，先以唯讀指令確認遊戲支援原生整區條件；不支援時保留舊歷史、不施工。受保護的保存、建造、檢查與載入都固定作用於主世界。協定與演算法見 [整區 Undo 設計](agents/docs/undo/region-undo.md)。
+- 只復原快照內的方塊與遊戲結構能保存的資料；不復原生物、掉落物、玩家背包、區域外的水流與機關連鎖。對容器等原始方塊的額外資料不提供 RAM 位元組上限保證。
+
+待機不掃描世界、不持續備份。額外成本發生在建造前的快照及復原時的檢查／載入；原生比對仍需遍歷方塊，提高格數上限仍會增加遊戲的工作量與記憶體用量，不能保證不影響 FPS。`mc_undo_control` 回報快照數、格數及 `backupMs`／`checkMs`／`restoreMs`，它們是耗時，不是記憶體用量。資源吃緊時可把 `maxBlocks` 調低。關閉、清除、下一步與成功還原時會釋放本服務快照。正常結束也會嘗試清理；強制關閉或斷線可能留下遊戲記憶體快照，直到卸載世界才消失。手動命名的結構不會被自動刪除。
+
+程式重啟後不保留 Undo 歷史。更新程式並 build 之後，現有 MCP 行程仍使用載入時的版本；須由 Host 重載 MCP 才有新工具。重載會結束原橋接，遊戲須重新 `/connect`。
+
+真機測試可用 `node scripts/undo-live-check.mjs --origin=x,y,z --size=16 --keep-open`（先 build）。[測試腳本](scripts/undo-live-check.mjs) 啟動新版橋接並印出 `/connect`，需玩家手動連入。它只使用明確指定的測試區，先確認整區全空氣與玩家不在範圍，再經 MCP 測試備份、內部單格衝突、還原及有條件清理；若失敗會停止並列出保留的快照名稱。`--keep-open` 在測試結束後保留遊戲連線，並接受 `{ "name": "mc_status", "args": {} }` 形式的 JSONL MCP 呼叫。加上 `--diagnose` 時只啟動橋接，不自動檢查區域或建造；適合先比對連線前後的聊天與輸入法行為。指定了測試原點後，才可用 `{ "action": "test" }` 開始驗收；原貌或舊歷史不符時會停止。一般加密握手與每 30 秒唯讀保活仍照常執行。
+
+`{ "action": "probe" }` 列出一條唯讀診斷階梯，`{ "action": "probe", "probe": "<名稱>" }` 送出其中一條。整區 guard 一次改變了六個變數（`body.version`、`execute` 包裝、`@s` 選擇器、`if block` 的 aux 值、三次來源與目的重疊的區域比對、指令長度），所以整條測不出原因；請依探測的 note 選成對對照，清單相鄰項目不保證只有一項差異。先測 `time-v1`／`time-v25` 與 `time-v25`／`execute-time-v25`，再依結果選取：`query-v1` → `query-v25`（只換版本）→ `time-v25` → `execute-run-v1`／`-v25`（最短 execute）→ `execute-self-v25`（只換 `@s`）→ `if-block-v25`／`-noaux-v25`（aux 值）→ `if-blocks-1d-disjoint`／`-overlap`（來源與目的是否重疊）→ `testforblocks-disjoint`／`-overlap-v1`（同一種比對但不經 execute 與 v25）→ `guard-2x2x2-v25`／`-self-v25`（真正的 guard 形狀，只有 8 格；與整區 guard 的長度與條件數完全相同）→ `guard-conditions-3`／`-12-v25`（條件數與長度）→ `guard-region-v25`（完整重現失敗的那條）。每條都經啟動時的斷言確認終端指令唯讀、不含改動世界的動詞，且直接走橋接、不經 Undo 服務，因此不會配置快照也不會寫方塊。**任一條逾時就停住整條階梯**：同一條連線不再送出任何 probe，不重播、不自動重試，必須重新 `/connect` 才會恢復。
 
 ### 反覆修改同一棟建築
 
@@ -431,9 +485,11 @@ BlockHand 的管線是：
 | `MINECRAFT_EDU_WS_PORT` | `19131` | 優先監聽埠；實際值以 `mc_status` 回報為準 |
 | `MINECRAFT_EDU_WS_PORT_FALLBACK` | `1` | 優先埠被其他 MCP 任務占用時，由作業系統自動配一個空閒埠；設成 `0` 可要求占埠即失敗 |
 | `MINECRAFT_EDU_COMMAND_TIMEOUT_MS` | `10000` | 單一指令等待遊戲回應的逾時 |
-| `MINECRAFT_EDU_KEEPALIVE_INTERVAL_MS` | `30000` | 閒置時送出保活探測（`time query daytime`）的間隔。調小可更快發現真的斷線，代價是更常打擾遊戲 |
+| `MINECRAFT_EDU_KEEPALIVE_INTERVAL_MS` | `30000` | 閒置時送出保活探測（`time query daytime`）的間隔。調小可更快發現真的斷線，代價是更常打擾遊戲。需連續 3 次探測都毫無回應才終止連線 |
 | `MINECRAFT_EDU_EVENT_BUFFER` | `500` | 事件環形緩衝筆數 |
 | `MINECRAFT_EDU_MAX_BUILD_BLOCKS` | `200000` | 單次建造方塊數上限，超過即拒絕 |
+| `MINECRAFT_EDU_UNDO_ENABLED` | `1` | 自動單步備份；設成 `0` 可沿用原有完整建造能力與成本 |
+| `MINECRAFT_EDU_UNDO_MAX_BLOCKS` | `4096` | 自動備份格數預算，範圍 1–32768；另有最多 64 個備份區的限制 |
 | `MINECRAFT_EDU_STEP_DELAY_MS` | `100` | Agent 程式每步預設間隔 |
 | `MINECRAFT_EDU_DEBUG_FRAMES` | 未設 | 設成 `1` 會把遊戲回的每個原始封包印到 stderr，診斷協定行為用 |
 
@@ -450,11 +506,13 @@ src/
     command-policy.ts         raw 指令的結構性閘門
     build/shapes.ts           二十四種形狀；inside() + 外殼鄰居測試
     build/fill-planner.ts     三階段 greedy 合併 + 依上限拆批
+    build/undo-plan.ts        區域合併與覆蓋、預算檢查、原生整區復原條件
   ports/minecraft-connection.ts   連線抽象；測試靠它塞假件
   adapters/ws-minecraft-connection.ts  WebSocket 監聽、requestId 對應、事件緩衝、重連重訂閱
   application/
     blockhand-service.ts      Agent 程式展開、querytarget 解析、事件
     build-service.ts          規劃與執行分離（先讀後寫）
+    undo-service.ts           單步記憶體備份、衝突檢查、斷線與部分失敗保護
   server/
     create-server.ts          server 實例與給 Host 的操作指引
     schemas.ts                共用 zod 片段
@@ -475,13 +533,18 @@ src/
 - **Agent 是 Education Edition 專屬**，一般 Bedrock 版沒有這個功能。
 - **事件名稱與 `agent` 子指令 Mojang 沒有正式文件化**，來自公開觀察；遊戲改版可能改變行為。`mc_events_subscribe` 允許清單外的名稱，但會標記為未驗證。
 - **`agent setitem` 的參數順序未經證實**，目前沒有做成專用工具，需要時請走 `mc_run_command`。
-- **`@s` 在 WebSocket 指令下不一定能解析**：從橋接送進去的指令沒有實體身分，實測 `querytarget @s` 會完全沒有回應。`mc_query_target` 因此預設用 `@p`（最近的玩家），`live` 也會依序試 `@p` → `@a` → `@e[type=player]` 並回報每次結果。
+- **`@s` 在 WebSocket 指令下不一定能解析**：不同遊戲版本曾有無回應與正常解析兩種實測結果。`mc_query_target` 預設用 `@p`；自動 Undo 則必須成功取得 `querytarget @s` 的主世界維度，失敗時停止施工，不猜測作用中的世界。
 - **大型建造可能撞到 MCP Host 的請求逾時**：建造工具會逐條送出 fill 並等遊戲回應，實測半徑 6 的空心球（126 條）約需 13 秒，但遊戲繁忙時會更久。MCP client 預設逾時多為 60 秒，超過就會在 Host 端被砍斷（工具本身仍在跑）。先用 `mc_build_preview` 看 `fillBatches`，數量大時分批建造。
 - **每個 BlockHand 程序仍各自持有一個監聽埠**：STDIO client 關閉後，server 會同步關閉 Minecraft WebSocket 並釋放連接埠。AI 工具的桌面版同時載入多個任務，或桌面版／CLI／IDE 並行時，第一份會取得優先埠，其餘會自動取得空閒埠；請一律用目前任務的 `mc_status.connectCommand` 讓遊戲連到實際要操作的那一份。若需要固定埠，可替各 client 配不同的 `MINECRAFT_EDU_WS_PORT`，或把 `MINECRAFT_EDU_WS_PORT_FALLBACK` 設成 `0`。
-- **握手後的第一條指令曾必定逾時，現已修正**：四次獨立真機執行都重現——遊戲在伺服器裝好解密器之前就送出一個加密訊框，串流錯位導致下一次請求的回應讀不出來。AES-CFB8 會自我同步，所以只影響第一條。adapter 現在會在握手完成後自動送一條唯讀 `time query daytime` 把那次損失吸收掉並丟棄結果，呼叫端的第一個動作即可正常。stderr 會記 `primed post-handshake stream`。
+- **加密握手會同步安裝解密器**：握手回覆與後續加密訊框可能在同一批資料內到達。adapter 在處理握手回覆時就切換加密，避免等待 `await` 期間遺失後續訊框、造成串流錯位。握手後仍以唯讀 `time query daytime` 確認加密通道有回應；探測失敗會保留加密狀態，並記錄 `primed post-handshake stream` 的 `ok` 與 `elapsedMs`。回歸測試涵蓋同批加密事件、第一筆指令、公鑰無法解析與不含公鑰的錯誤回覆。此修正已通過離線測試；與鍵盤、輸入法或背包失效的關係仍待實機確認。
 - **事件只在真正發生時觸發**：`BlockPlaced` 只在玩家親手放方塊時發出，`/setblock` 與 `/fill` 都不算。要收到事件必須先訂閱、再讓事件真的發生。
-- **部分回應的 requestId 對不上請求**（觀察到會回全為零的 ID）。adapter 在「只剩一個待決請求」時會把回應歸給它，並在 stderr 記錄這是推斷來的；否則那些請求會一路靜默逾時，呼叫端只看到「沒反應」而不是真正的失敗原因。
-- 一次只維持一條遊戲連線；新連線會取代舊的。
+- **網路連線與遊戲回應分開回報**：`mc_status.connected` 只代表 WebSocket 存在；`commandState` 的 `unknown`／`responsive`／`timed-out` 表示尚無證據、最近收到匹配的指令回覆、最近有指令逾時。`lastCommandResponseAt`／`lastCommandTimeoutAt` 保留相應時間，`inFlightCommands`／`queuedCommands` 顯示橋接這側還有多少工作。語法錯誤也能證明遊戲有回覆；`responsive` 不表示建造成功或輸入法正常。若遊戲背景暫停、指令處理卡住或回覆無法解析，可能出現 connected=true 而指令逾時；不能單憑此狀態判定是哪一種原因。
+- **部分回應的 requestId 對不上請求**（觀察到會回全為零的 ID）。在本連線尚無逾時且只剩一個非保活待決請求時，adapter 可採推斷歸屬，並在 stderr 記錄。發生任一逾時後，直到新連線建立前都只接受可精確匹配的回覆，避免把遲到成功誤認為下一條施工成功；代價是無法歸屬的遊戲回覆可能繼續逾時。不自動重送修改指令。
+- **指令逐條送出，並限制排隊數量**：MCP host 會併發呼叫工具（收到 `tools/call` 就直接派給 handler，不等前一個完成），而唯讀指令不經過 Undo 的互斥鎖，所以呼叫端平行丟工具時橋接會同時收到多條指令。adapter 因此排隊逐條送，同時在飛的只有一條：目的是限制同時對遊戲發出的請求數，避免增加負載，也避免多條同時在飛時 requestId 對不上的回覆無法歸屬。`mc_status` 的 `inFlightCommands`（0 或 1）與 `queuedCommands` 可分辨「遊戲沒回」與「卡在呼叫端的併發」。排隊上限 64 條，超過即以 `command-queue-full` 拒絕而不排入。每一條在佇列裡的等待都有期限（該指令自己的逾時預算）：等過期就回報「沒有送出，之後也不會送出」並跳過，不讓呼叫端早已放棄的指令在幾分鐘後才動到世界。
+- **送出佇列綁在單一遊戲連線上**：換線或關閉時整批退休，等在裡面的指令一律回報未送出，一條都不會流進新遊戲；舊佇列的計數也不會影響新連線。新遊戲拿到的是一條空佇列，因此上一局塞滿的佇列不會擋住新連線的加密握手。握手失敗只記錄並退回明文，不會變成之後每條指令都繼承的錯誤。
+- **保活探測需連續多次無回應才斷線**：遊戲可能因載入、背景暫停或短暫卡頓而沒有處理指令；單次探測未回不足以證明 TCP 已失效。舊行為是一次探測沒回就終止 socket；現在需連續 3 次完全無回應才終止，以容忍短暫停頓。這些可能原因仍需實機對照確認；代價是真正的殭屍連線要多花幾個週期才會被清掉。
+- **「連上 MCP 後無法切換中文輸入法／聊天列 Enter 沒反應」尚未找到程式因果**：`src/`、`scripts/` 內沒有任何 AppleScript、鍵盤攔截或輸入法操作，橋接只透過 WebSocket 送 slash 指令。上述併發、佇列與保活修正都是可重現的程式錯誤，但**沒有證據證明它們是輸入法症狀的成因**，也還沒有實機對照可以排除遊戲本身的暫停／焦點行為。回報這個症狀時請一併記下：是否只有遊戲受影響、遊戲其他操作是否正常、`mc_status` 的 `commandState`／`inFlightCommands`／`queuedCommands`。
+- 一次只維持一條遊戲連線；新連線立即結束舊請求，不把舊指令重送到新遊戲。舊 socket 訊框、握手 continuation 與關閉事件不能改動新連線的加密／回覆狀態。批次遇到未知結果或連線更換時停止，即使 `stopOnError:false` 也不繼續排送；該選項僅允許在遊戲已確認的普通指令失敗後繼續。
 - 已完成真機驗證的環境：Minecraft Education **1.26.32.0（Win32 桌面版）**。若改用 Microsoft Store 的 UWP 版，loopback 會被 Windows 應用程式隔離擋住，需要額外的 `CheckNetIsolation LoopbackExempt` 豁免。macOS 14+ 的驗收矩陣見 [`agents/docs/macos-support.md`](agents/docs/macos-support.md)。
 
 ---

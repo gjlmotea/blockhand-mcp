@@ -2,20 +2,45 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 import type { BlockHandService } from '../../application/blockhand-service.js';
+import { DEFAULT_UNDO_BLOCKS, MAX_UNDO_BLOCKS } from '../../domain/build/undo-plan.js';
 import {
   batchOutcomeSchema,
   commandOutcomeSchema,
   connectionStatusSchema,
+  undoStatusSchema,
 } from '../schemas.js';
 import { batchToPayload, guard, ok, outcomeToPayload, summarizeBatch, summarizeOutcome } from '../tool-kit.js';
 
 export function registerSessionTools(server: McpServer, service: BlockHandService): void {
+  server.registerTool('mc_undo_control', {
+    title:'查看或設定單步復原',
+    description:`action=status 只讀取自動 Undo 狀態與耗時；configure 可開關及調整格數預算（預設${DEFAULT_UNDO_BLOCKS}、上限${MAX_UNDO_BLOCKS}）；依相同材質合併整區保存、原生整區比對。clear 釋放本服務的備份。只使用遊戲 memory，沒有磁碟備份或 Redo。關閉自動備份會清除舊歷史。`,
+    inputSchema:z.object({action:z.enum(['status','configure','clear']).default('status'),enabled:z.boolean().optional(),maxBlocks:z.number().int().min(1).max(MAX_UNDO_BLOCKS).optional()}).strict(),
+    outputSchema:undoStatusSchema(),
+    annotations:{readOnlyHint:false,idempotentHint:true,destructiveHint:true,openWorldHint:false},
+  },async({action,enabled,maxBlocks})=>guard(async()=>{
+    if(!service.undo) throw new Error('此執行環境未配置 Undo。');
+    if(action!=='configure'&&(enabled!==undefined||maxBlocks!==undefined)) throw new Error('enabled/maxBlocks 只適用於 configure。');
+    const result=action==='status'?service.undo.status():await service.undo.configure(enabled,maxBlocks,action==='clear');
+    return ok({...result},result.reason??`Undo ${result.enabled?'已開啟':'已停用'}，目前${result.available?'可復原':'沒有可直接復原的操作'}。`);
+  }));
+  server.registerTool('mc_undo', {
+    title:'復原上一次建造',
+    description:'復原最後一次受保護的 setblock/fill 或建造工具呼叫；多條建造指令算一步。先檢查所有目標方塊，再逐區以條件指令還原，避免覆蓋後來的修改。operationId 可防止復原錯誤版本。overwriteChanges 只在使用者明確要求覆蓋衝突或接受不確定操作的現場復原時使用，不能自動設為true。第一版只有主世界基本建材，不含生物、背包、區域外水流/機關連鎖或 Redo；操作期間請勿切換世界/維度。',
+    inputSchema:z.object({operationId:z.string().min(1).optional(),overwriteChanges:z.boolean().default(false)}).strict(),
+    outputSchema:undoStatusSchema(),
+    annotations:{readOnlyHint:false,idempotentHint:false,destructiveHint:true,openWorldHint:false},
+  },async({operationId,overwriteChanges})=>guard(async()=>{
+    if(!service.undo) throw new Error('此執行環境未配置 Undo。');
+    const result=await service.undo.undo(operationId,overwriteChanges);
+    return ok({...result},result.reason??'復原完成。');
+  }));
   server.registerTool(
     'mc_status',
     {
       title: '讀取橋接與連線狀態',
       description:
-        '回報 WebSocket 橋接是否在監聽、Minecraft 是否已連入、遊戲內應輸入的 /connect 指令、已訂閱事件與累計指令數。任何工具失敗時先查這個。無副作用。',
+        '回報 WebSocket 橋接、遊戲指令回應狀態（commandState）、最近回覆／逾時時間、/connect 指令與已訂閱事件。connected 只代表網路連線；timed-out 表示最近有指令未回覆，不能據此假定遊戲仍可執行操作。無副作用。',
       inputSchema: z.object({}).strict(),
       outputSchema: connectionStatusSchema(),
       annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
@@ -25,9 +50,11 @@ export function registerSessionTools(server: McpServer, service: BlockHandServic
         const status = service.status();
         const saved = service.savedStructures();
         return ok(
-          { ...status, savedStructures: saved },
+          { ...status, savedStructures: saved, ...(service.undo ? {undo: {...service.undo.status()}} : {}) },
           status.connected
-            ? `已連線（第 ${String(status.connectionCount)} 次），累計送出 ${String(status.commandsIssued)} 條指令。` +
+            ? (status.commandState === 'timed-out'
+                ? '網路已連上，但最近指令未獲回覆；尚未確認遊戲可執行操作。'
+                : `已連線（第 ${String(status.connectionCount)} 次），累計送出 ${String(status.commandsIssued)} 條指令。`) +
               (saved.length === 0
                 ? ''
                 : `本次存過的結構：${saved.map((entry) => `${entry.name}（${entry.saveMode}）`).join('、')}。`)
@@ -52,9 +79,11 @@ export function registerSessionTools(server: McpServer, service: BlockHandServic
       guard(async () => {
         const status = await service.awaitConnection(timeoutSeconds * 1000);
         return ok(
-          { ...status, savedStructures: service.savedStructures() },
+          { ...status, savedStructures: service.savedStructures(), ...(service.undo ? {undo: {...service.undo.status()}} : {}) },
           status.connected
-            ? 'Minecraft 已連上橋接。'
+            ? status.commandState === 'timed-out'
+              ? '網路已連上，但最近指令未獲回覆；請先確認遊戲畫面與回應狀態。'
+              : 'Minecraft 已連上橋接。'
             : `等待 ${String(timeoutSeconds)} 秒後仍未連上。請確認遊戲內已輸入 ${status.connectCommand}，且世界開啟了作弊。`,
         );
       }),

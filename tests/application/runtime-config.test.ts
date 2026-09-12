@@ -6,6 +6,8 @@ const ENV_NAMES = [
   'MINECRAFT_EDU_WS_HOST',
   'MINECRAFT_EDU_WS_PORT',
   'MINECRAFT_EDU_WS_PORT_FALLBACK',
+  'MINECRAFT_EDU_UNDO_ENABLED',
+  'MINECRAFT_EDU_UNDO_MAX_BLOCKS',
 ] as const;
 const originalEnvironment = Object.fromEntries(
   ENV_NAMES.map((name) => [name, process.env[name]]),
@@ -34,6 +36,8 @@ describe.sequential('runtime WebSocket config', () => {
     expect(config.host).toBe('127.0.0.1');
     expect(config.port).toBe(19_131);
     expect(config.fallbackToRandomPort).toBe(true);
+    expect(config.undoEnabled).toBe(true);
+    expect(config.maxUndoBlocks).toBe(4096);
   });
 
   it('負數或超出範圍的 port 不會傳給 WebSocket server', () => {
@@ -41,5 +45,15 @@ describe.sequential('runtime WebSocket config', () => {
     expect(readRuntimeConfig().port).toBe(19_131);
     process.env['MINECRAFT_EDU_WS_PORT'] = '65536';
     expect(readRuntimeConfig().port).toBe(19_131);
+  });
+
+  it('Undo 可停用，格數超出硬上限時回到保守預設', () => {
+    process.env['MINECRAFT_EDU_UNDO_ENABLED'] = '0';
+    process.env['MINECRAFT_EDU_UNDO_MAX_BLOCKS'] = '32';
+    expect(readRuntimeConfig()).toMatchObject({undoEnabled:false,maxUndoBlocks:32});
+    for (const value of ['0', '-1', '32769', 'NaN']) {
+      process.env['MINECRAFT_EDU_UNDO_MAX_BLOCKS'] = value;
+      expect(readRuntimeConfig().maxUndoBlocks).toBe(4096);
+    }
   });
 });

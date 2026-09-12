@@ -12,6 +12,11 @@ export interface SequenceOptions {
   readonly delayMs: number;
 }
 
+export interface CommandOptions {
+  /** 25 enables released modern execute while retaining numeric block data. */
+  readonly commandVersion?: 1 | 25;
+}
+
 /**
  * 與 Minecraft Education 之間的連線抽象。
  *
@@ -23,7 +28,7 @@ export interface MinecraftConnection {
   close(): Promise<void>;
   status(): ConnectionStatus;
   awaitConnection(timeoutMs: number): Promise<ConnectionStatus>;
-  runCommand(commandLine: string): Promise<CommandOutcome>;
+  runCommand(commandLine: string, options?: CommandOptions): Promise<CommandOutcome>;
   runSequence(commandLines: readonly string[], options: SequenceOptions): Promise<BatchOutcome>;
   subscribe(eventName: string): Promise<void>;
   unsubscribe(eventName: string): Promise<void>;

@@ -69,6 +69,14 @@ export const quantitySchema = () => z.number().int().min(1).max(64);
 
 /* ────────────────────────── 共用輸出 ────────────────────────── */
 
+export const undoStatusSchema = () => z.object({
+  enabled:z.boolean(), maxBlocks:z.number().int(), maxRegions:z.number().int(),
+  state:z.enum(['empty','ready','uncertain','partial','cleanup-required','invalidated']),
+  busy:z.boolean(), available:z.boolean(), operationId:z.string().nullable(),
+  storedBlocks:z.number().int(), snapshotCount:z.number().int(), restoredRegions:z.number().int(),
+  backupMs:z.number(), checkMs:z.number(), restoreMs:z.number(), reason:z.string().nullable(),
+}).strict();
+
 export const commandOutcomeSchema = () =>
   z
     .object({
@@ -78,6 +86,7 @@ export const commandOutcomeSchema = () =>
       statusMessage: z.string().nullable(),
       data: z.record(z.unknown()).nullable(),
       elapsedMs: z.number(),
+      undo: undoStatusSchema().optional(),
     })
     .strict();
 
@@ -91,6 +100,7 @@ export const batchOutcomeSchema = () =>
       firstFailure: commandOutcomeSchema().nullable(),
       outcomes: z.array(commandOutcomeSchema()),
       elapsedMs: z.number(),
+      undo: undoStatusSchema().optional(),
     })
     .strict();
 
@@ -108,6 +118,15 @@ export const connectionStatusSchema = () =>
       bufferedEvents: z.number(),
       commandsIssued: z.number(),
       encrypted: z.boolean(),
+      commandState: z.enum(['unknown', 'responsive', 'timed-out']).optional(),
+      lastCommandResponseAt: z.string().nullable().optional(),
+      lastCommandTimeoutAt: z.string().nullable().optional(),
+      inFlightCommands: z.number().optional().describe('已送進遊戲、還在等回覆的指令數；橋接一次只送一條'),
+      queuedCommands: z
+        .number()
+        .optional()
+        .describe('還沒送出、正在排隊的指令數；大於 0 代表卡在呼叫端的併發而不是遊戲'),
+      undo: undoStatusSchema().optional(),
       savedStructures: z
         .array(z.object({ name: z.string(), saveMode: z.string() }).strict())
         .describe('本次連線存過的結構；遊戲沒有列出結構的指令，所以只能由橋接自己記'),
