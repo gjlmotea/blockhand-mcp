@@ -148,4 +148,11 @@ describe('single-step undo lifecycle',()=>{
     await expect(connection.runCommand('setblock 0 20 0 glass')).rejects.toThrow('能力確認');
     expect(w.snapshots.size).toBe(0);expect(w.get(0,20,0).block).toBe('air');expect(undo.status().busy).toBe(false);
   });
+  it('reports a timed-out dimension query as no reply, not as an unreadable dimension',async()=>{
+    const {w,connection,undo}=setup();
+    w.setHook(c=>c.startsWith('querytarget')?w.result(c,false,{statusCode:null,statusMessage:'等待遊戲回應超過 10000 ms。'}):undefined);
+    await expect(connection.runCommand('setblock 0 20 0 glass')).rejects.toMatchObject({code:'undo-context-no-reply',message:expect.stringContaining('遊戲沒有回覆')});
+    expect(w.issued.some(c=>c.startsWith('structure save')||c.startsWith('setblock'))).toBe(false);
+    expect(w.get(0,20,0).block).toBe('air');expect(undo.status().busy).toBe(false);
+  });
 });

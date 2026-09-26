@@ -14,7 +14,7 @@ import { batchToPayload, guard, ok, outcomeToPayload, summarizeBatch, summarizeO
 export function registerSessionTools(server: McpServer, service: BlockHandService): void {
   server.registerTool('mc_undo_control', {
     title:'查看或設定單步復原',
-    description:`action=status 只讀取自動 Undo 狀態與耗時；configure 可開關及調整格數預算（預設${DEFAULT_UNDO_BLOCKS}、上限${MAX_UNDO_BLOCKS}）；依相同材質合併整區保存、原生整區比對。clear 釋放本服務的備份。只使用遊戲 memory，沒有磁碟備份或 Redo。關閉自動備份會清除舊歷史。`,
+    description:`注意：自動 Undo 預設關閉。在 Education 1.26.x 上開啟後，第一次建造前的原生檢查會讓遊戲的指令通道永久不回應（玩家打字也沒反應），只能重開 Minecraft；只在使用者明確要求時才 configure enabled=true。action=status 只讀取自動 Undo 狀態與耗時；configure 可開關及調整格數預算（預設${DEFAULT_UNDO_BLOCKS}、上限${MAX_UNDO_BLOCKS}）；依相同材質合併整區保存、原生整區比對。clear 釋放本服務的備份。只使用遊戲 memory，沒有磁碟備份或 Redo。關閉自動備份會清除舊歷史。`,
     inputSchema:z.object({action:z.enum(['status','configure','clear']).default('status'),enabled:z.boolean().optional(),maxBlocks:z.number().int().min(1).max(MAX_UNDO_BLOCKS).optional()}).strict(),
     outputSchema:undoStatusSchema(),
     annotations:{readOnlyHint:false,idempotentHint:true,destructiveHint:true,openWorldHint:false},

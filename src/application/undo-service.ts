@@ -77,6 +77,9 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
       const rows: unknown=typeof raw === 'string' ? JSON.parse(raw) : null;
       if(result.ok && Array.isArray(rows) && rows.length===1 && typeof rows[0]?.dimension === 'number') return rows[0].dimension as number;
     } catch { /* A missing world context must not become an assumed overworld. */ }
+    if(!result.ok && result.statusCode===null) {
+      throw new MinecraftBridgeError('undo-context-no-reply', `查詢指令發起者的維度時遊戲沒有回覆（${result.statusMessage ?? '原因不明'}），未執行可復原的修改。`);
+    }
     throw new MinecraftBridgeError('undo-context-unknown', '讀不到指令發起者的維度，未執行可復原的修改。');
   }
   async function requireContext(target: Entry): Promise<void> {

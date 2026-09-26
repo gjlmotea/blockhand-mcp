@@ -260,7 +260,7 @@ cd gjlmotea/vibe/mcp/minecraft-edu && corepack pnpm run verify
 | 工具 | 用途 |
 |---|---|
 | `mc_status` | 橋接狀態、連線指令、已訂閱事件、累計指令數。任何失敗先查這個 |
-| `mc_undo_control` | 查看、清除或設定自動單步備份；預設開啟、4,096 格、遊戲記憶體 |
+| `mc_undo_control` | 查看、清除或設定自動單步備份；**預設關閉**（見下方警告）、4,096 格、遊戲記憶體 |
 | `mc_undo` | 復原上一筆受保護的建造，先檢查方塊衝突；無 Redo |
 | `mc_await_connection` | 阻塞等待遊戲連入（單次上限 120 秒） |
 | `mc_run_command` | 單行 raw slash 指令；沒有專用工具時的後備 |
@@ -313,7 +313,9 @@ Agent 方向是**相對它自己的面向**，不是世界方位。
 
 ### 自動單步 Undo
 
-預設開啟，只保留**一個操作、最多 4,096 格**的施工前原貌。方塊快照用遊戲的 `structure save ... memory`，不寫磁碟；MCP 合併連續同材質的預期結果，只保存區域邊界、材質與快照名稱，不逐格展開紀錄。開始下一筆前先刪除上一筆快照，不累積歷史；沒有 Redo。
+> **預設關閉。** 在 Minecraft Education 1.26.32（macOS）實機上，開啟 Undo 後第一次小型建造前送出的原生整區檢查（`body.version=25`）從未得到回覆；之後同一條連線的所有指令都逾時，**連玩家自己在聊天列打的字和 `/connect` 都沒有反應**，只能完全關閉 Minecraft 再開。已重現三次，成因細節見 [整區 Undo 設計](agents/docs/undo/region-undo.md)。要開啟請設環境變數 `MINECRAFT_EDU_UNDO_ENABLED=1`，或用 `mc_undo_control` 的 `configure enabled=true`，並自行承擔上述風險。
+
+開啟後只保留**一個操作、最多 4,096 格**的施工前原貌。方塊快照用遊戲的 `structure save ... memory`，不寫磁碟；MCP 合併連續同材質的預期結果，只保存區域邊界、材質與快照名稱，不逐格展開紀錄。開始下一筆前先刪除上一筆快照，不累積歷史；沒有 Redo。
 
 ```json
 {"name":"mc_undo_control","arguments":{"action":"status"}}
@@ -488,7 +490,7 @@ BlockHand 的管線是：
 | `MINECRAFT_EDU_KEEPALIVE_INTERVAL_MS` | `30000` | 閒置時送出保活探測（`time query daytime`）的間隔。調小可更快發現真的斷線，代價是更常打擾遊戲。需連續 3 次探測都毫無回應才終止連線 |
 | `MINECRAFT_EDU_EVENT_BUFFER` | `500` | 事件環形緩衝筆數 |
 | `MINECRAFT_EDU_MAX_BUILD_BLOCKS` | `200000` | 單次建造方塊數上限，超過即拒絕 |
-| `MINECRAFT_EDU_UNDO_ENABLED` | `1` | 自動單步備份；設成 `0` 可沿用原有完整建造能力與成本 |
+| `MINECRAFT_EDU_UNDO_ENABLED` | `0` | 設成 `1` 才開啟自動單步備份；Education 1.26.x 上有卡死整條指令通道的風險，見〈自動單步 Undo〉的警告 |
 | `MINECRAFT_EDU_UNDO_MAX_BLOCKS` | `4096` | 自動備份格數預算，範圍 1–32768；另有最多 64 個備份區的限制 |
 | `MINECRAFT_EDU_STEP_DELAY_MS` | `100` | Agent 程式每步預設間隔 |
 | `MINECRAFT_EDU_DEBUG_FRAMES` | 未設 | 設成 `1` 會把遊戲回的每個原始封包印到 stderr，診斷協定行為用 |

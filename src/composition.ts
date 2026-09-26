@@ -44,7 +44,8 @@ function readInt(name: string, fallback: number, min: number, max: number): numb
 export function readRuntimeConfig(): RuntimeConfig {
   const host = process.env['MINECRAFT_EDU_WS_HOST']?.trim();
   return {
-    undoEnabled: process.env['MINECRAFT_EDU_UNDO_ENABLED'] !== '0',
+    // 預設關閉：Education 1.26.x 上 Undo 的 version 25 原生檢查會卡死整條指令通道（見 agents/docs/undo/region-undo.md）。
+    undoEnabled: process.env['MINECRAFT_EDU_UNDO_ENABLED'] === '1',
     maxUndoBlocks: readInt('MINECRAFT_EDU_UNDO_MAX_BLOCKS', DEFAULT_UNDO_BLOCKS, 1, MAX_UNDO_BLOCKS),
     host: host === undefined || host === '' ? DEFAULTS.host : host,
     // 0 是 Node 的正式語意：請作業系統配發空閒埠。一般使用仍預設 19131，
@@ -85,7 +86,7 @@ export function composeRuntime(version: string, config: RuntimeConfig, connectio
     });
 
   const protectedWorld = createUndoConnection(activeConnection, {
-    enabled: config.undoEnabled ?? true,
+    enabled: config.undoEnabled ?? false,
     maxBlocks: config.maxUndoBlocks ?? DEFAULT_UNDO_BLOCKS,
   });
   const service = createBlockHandService(protectedWorld.connection, {

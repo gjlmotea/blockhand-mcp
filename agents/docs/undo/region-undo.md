@@ -42,6 +42,10 @@
 
 實機（Education macOS 1.26.32）出現過：橋接連線與保活連續 28 分鐘正常（`time query daytime` 93 ms、`querytarget @p` 63 ms），但第一條 `body.version=25` 的整區 guard 沒有任何回覆，接著連 `body.version=1` 的 `time query daytime` 也沒有回覆；沒有 `unmatched response`、沒有非 JSON 訊框，就是沒有回覆。沒有建立快照、沒有寫入方塊。
 
+2026-09-26 同一台、同版本再重現兩次（兩條獨立連線），時序完全一致：`querytarget @s` 35–70 ms 正常回覆 → 緊接送出第一條 `body.version=25` guard → 永不回覆 → 同連線其後所有指令（含保活）逾時，socket 仍顯示 connected。新觀察到**玩家自己在聊天列打的指令（包括 `/connect`）也不再生效**，只能完全關閉 Minecraft：macOS `/Library/Logs/DiagnosticReports/minecraft-edu_*.cpu_resource.diag` 的 PID 顯示兩次卡死後都被迫重開 app（1499→2524→18871），卡死期間的取樣是正常渲染，不是當機或記憶體不足。關閉自動 Undo 後，同一遊戲 636 條指令（含曾觸發卡死的同一筆 25 格 fill）零逾時。
+
+因此自動 Undo 改為**預設關閉**（`MINECRAFT_EDU_UNDO_ENABLED=1` 才開）。另外 `dimension()` 以前把 `querytarget @s` 的逾時報成「讀不到指令發起者的維度」，讓人誤以為是 `@s` 解析問題；現在逾時改報 `undo-context-no-reply`。
+
 **成因尚未確定。** 已知的候選各自都還缺證據：`if blocks` 的來源與目的重疊、新式 execute 的 deferral 與 WebSocket 回覆的關係、`@s` 在 WebSocket 來源下的解析、比對體積、指令長度或條件數。不能因為時序相鄰就宣稱遊戲被這條指令鎖死，也不能無證據換一個 `body.version` 數字就說修好了。
 
 區分方式是 [undo-live-check.mjs](../../../scripts/undo-live-check.mjs) 的 `{ "action": "probe" }` 唯讀探測：依每項 note 選取成對的對照，一次送一條，逾時就停止同一條連線的後續探測（不重播、不自動重試）。先比較 `time-v1`／`time-v25`，再比較 `time-v25`／`execute-time-v25`，可分開檢查版本與 execute 包裝；與 `execute-run-v25` 對照則可檢查 querytarget 的特殊行為。清單順序不代表相鄰項目皆為單變量對照。目前保留 `guardUndoRegion` 的形狀、`body.version` 25 與 1024 字元上限，待實機證據決定修正。
