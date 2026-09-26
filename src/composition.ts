@@ -18,6 +18,7 @@ export interface RuntimeConfig {
   readonly stepDelayMs: number;
   readonly debugFrames: boolean;
   readonly negotiateEncryption: boolean;
+  readonly announceConnection?: boolean;
 }
 
 const DEFAULTS: RuntimeConfig = {
@@ -68,6 +69,8 @@ export function readRuntimeConfig(): RuntimeConfig {
     // 預設嘗試握手。Education 的「需要加密的 WebSocket」開啟時這是必要的，
     // 關閉時握手失敗也只會退回明文，所以預設開著沒有壞處。
     negotiateEncryption: process.env['MINECRAFT_EDU_ENCRYPTION'] !== '0',
+    // 重打同一個 /connect 時遊戲毫無反應，只有連上時的這行字能讓玩家分辨「連著」與「卡死」。
+    announceConnection: process.env['MINECRAFT_EDU_CONNECT_NOTICE'] !== '0',
   };
 }
 
@@ -83,6 +86,7 @@ export function composeRuntime(version: string, config: RuntimeConfig, connectio
       eventBufferSize: config.eventBufferSize,
       debugFrames: config.debugFrames,
       negotiateEncryption: config.negotiateEncryption,
+      announceConnection: config.announceConnection ?? false,
     });
 
   const protectedWorld = createUndoConnection(activeConnection, {

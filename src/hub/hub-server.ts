@@ -172,6 +172,12 @@ export async function startHub(options: {
       void close('shutdown-request');
       return;
     }
+    if (request.method === 'POST' && path === '/keepalive') {
+      // 閒置的對話不送任何 MCP 請求，只看 /mcp 流量會誤判沒人在用；報到也算活動。
+      lastActivity = Date.now();
+      response.writeHead(204).end();
+      return;
+    }
     if (path !== '/mcp') {
       response.writeHead(404).end();
       return;

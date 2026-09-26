@@ -728,6 +728,46 @@ describe('ws adapter', () => {
     expect(connection.status().connected).toBe(false);
   });
 
+  it('開啟 announceConnection 時，握手後在聊天列宣告已連上，且不算進玩家送出的指令數', async () => {
+    const connection = createWsMinecraftConnection({
+      host: '127.0.0.1',
+      port: 0,
+      fallbackToRandomPort: false,
+      commandTimeoutMs: 1500,
+      eventBufferSize: 50,
+      debugFrames: false,
+      negotiateEncryption: false,
+      announceConnection: true,
+    });
+    active = connection;
+    await connection.start();
+    const port = connection.status().port;
+    const socket = new WebSocket(`ws://127.0.0.1:${String(port)}`);
+    client = socket;
+    const notice = new Promise<string>((resolve) => {
+      socket.on('message', (data: Buffer) => {
+        const frame = JSON.parse(data.toString()) as {
+          header: { requestId: string; messagePurpose: string };
+          body: { commandLine?: string };
+        };
+        if (frame.header.messagePurpose !== 'commandRequest') return;
+        socket.send(JSON.stringify({
+          header: { messagePurpose: 'commandResponse', requestId: frame.header.requestId },
+          body: { statusCode: 0 },
+        }));
+        resolve(frame.body.commandLine ?? '');
+      });
+    });
+    await connection.awaitConnection(2000);
+    const commandLine = await notice;
+    expect(commandLine.startsWith('tellraw @a ')).toBe(true);
+    const text = (JSON.parse(commandLine.slice('tellraw @a '.length)) as { rawtext: Array<{ text: string }> })
+      .rawtext.map((part) => part.text).join('');
+    expect(text).toContain('已連上 Claude');
+    expect(text).toContain(`127.0.0.1:${String(port)}`);
+    expect(connection.status().commandsIssued).toBe(0);
+  });
+
   it('未連線時 runCommand 丟出帶連線指示的錯誤', async () => {
     const connection = createWsMinecraftConnection({
       host: '127.0.0.1',

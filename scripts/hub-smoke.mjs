@@ -93,9 +93,14 @@ try {
 
   process.kill(first.pid, 'SIGTERM');
   await waitFor(() => !alive(first.pid), 5_000, 'hub to exit after SIGTERM');
-  assert.equal(await connectCommand(b.client), expected, 'proxy re-attaches after the hub died');
+  // No tool call here: the open session's keepalive alone must bring the shared port back.
+  await waitFor(() => {
+    const next = hubState();
+    return next !== null && next.pid !== first.pid && alive(next.pid);
+  }, 8_000, 'an open session to restart the hub without any tool call');
   const second = hubState();
-  assert.ok(second !== null && second.pid !== first.pid && alive(second.pid), 'a new hub took over');
+  assert.equal(await connectCommand(b.client), expected, 'proxy re-attaches after the hub died');
+  assert.equal(hubState().pid, second.pid, 'the request used the hub the keepalive started');
 
   await b.client.close();
   await waitFor(() => !alive(second.pid), 8_000, 'idle hub to exit');
@@ -113,7 +118,7 @@ try {
     await new Promise((resolve) => squatter.close(resolve));
   }
 
-  console.log('Minecraft Education MCP shared-hub smoke passed（attach, share, re-attach, idle exit, fallback）。');
+  console.log('Minecraft Education MCP shared-hub smoke passed（attach, share, keepalive restart, re-attach, idle exit, fallback）。');
 } catch (error) {
   for (const [index, handle] of proxies.entries()) {
     process.stderr.write(`--- proxy ${index} stderr ---\n${handle.stderr()}\n`);

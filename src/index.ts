@@ -36,7 +36,11 @@ export async function main(): Promise<void> {
   }
   if (hub.enabled) {
     if ((await runProxy(hub, version, config.port)) === 'attached') return;
-    log('info', 'shared hub unavailable; running a standalone bridge', { wsPort: config.port });
+    // 共用埠只留給中樞。退回獨立模式的橋接若剛好搶到它，之後每個新對話都會看到
+    // 「埠被別人占著」而跟著退回隨機埠，直到這個對話結束——/connect 的位址就會一直換。
+    log('info', 'shared hub unavailable; running a standalone bridge on a random port', { sharedPort: config.port });
+    await runStandalone(version, { ...config, port: 0 });
+    return;
   }
   await runStandalone(version, config);
 }

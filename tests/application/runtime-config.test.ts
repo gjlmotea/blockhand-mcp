@@ -8,6 +8,7 @@ const ENV_NAMES = [
   'MINECRAFT_EDU_WS_PORT_FALLBACK',
   'MINECRAFT_EDU_UNDO_ENABLED',
   'MINECRAFT_EDU_UNDO_MAX_BLOCKS',
+  'MINECRAFT_EDU_CONNECT_NOTICE',
 ] as const;
 const originalEnvironment = Object.fromEntries(
   ENV_NAMES.map((name) => [name, process.env[name]]),
@@ -38,6 +39,13 @@ describe.sequential('runtime WebSocket config', () => {
     expect(config.fallbackToRandomPort).toBe(true);
     expect(config.undoEnabled).toBe(false);
     expect(config.maxUndoBlocks).toBe(4096);
+  });
+
+  it('連上時的提示預設開啟，只有明確設為 0 才關閉', () => {
+    for (const name of ENV_NAMES) delete process.env[name];
+    expect(readRuntimeConfig().announceConnection).toBe(true);
+    process.env['MINECRAFT_EDU_CONNECT_NOTICE'] = '0';
+    expect(readRuntimeConfig().announceConnection).toBe(false);
   });
 
   it('負數或超出範圍的 port 不會傳給 WebSocket server', () => {

@@ -113,6 +113,23 @@ export async function fetchHealth(state: HubState, timeoutMs = 1_500): Promise<H
   }
 }
 
+/**
+ * 對話開著就定期報到，讓中樞不會因為「沒人呼叫工具」而關掉共用埠。
+ * false 代表中樞已經不在，或已被別的中樞取代（token 對不上）。
+ */
+export async function sendKeepalive(state: HubState, timeoutMs = 3_000): Promise<boolean> {
+  try {
+    const response = await fetch(`http://127.0.0.1:${String(state.controlPort)}/keepalive`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${state.token}` },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function requestHubShutdown(state: HubState): Promise<boolean> {
   try {
     const response = await fetch(`http://127.0.0.1:${String(state.controlPort)}/shutdown`, {

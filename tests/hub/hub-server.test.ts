@@ -159,6 +159,24 @@ describe('shared hub', () => {
     expect(existsSync(join(dir, 'hub.json'))).toBe(false);
   });
 
+  it('stays up while sessions keep checking in, even with no game and no tool calls', async () => {
+    const hub = await start(createFakeConnection({ connected: false }), { idleMs: 1_000 });
+    let exited = false;
+    void hub.closed.then(() => { exited = true; });
+    for (let i = 0; i < 6; i += 1) {
+      expect((await control(hub, '/keepalive', 'POST')).status).toBe(204);
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    }
+    expect(exited).toBe(false);
+    await hub.closed;
+    expect(existsSync(join(dir, 'hub.json'))).toBe(false);
+  });
+
+  it('does not accept a keepalive without the token', async () => {
+    const hub = await start(createFakeConnection());
+    expect((await control(hub, '/keepalive', 'POST', 'wrong-token')).status).toBe(401);
+  });
+
   it('steps aside when another hub already owns the control port', async () => {
     const hub = await start(createFakeConnection());
     const second = await startHub({

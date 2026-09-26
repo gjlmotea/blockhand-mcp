@@ -45,6 +45,13 @@ export interface WsConnectionOptions {
   readonly debugFrames: boolean;
   /** 連線後是否嘗試加密握手。關閉只在診斷時有意義。 */
   readonly negotiateEncryption: boolean;
+  /**
+   * 握手完成後在玩家聊天列印一行「已連上」。
+   *
+   * 已經連著時玩家再打一次同一個 /connect，遊戲不會重連，也不會顯示任何字，
+   * 看起來跟卡死一模一樣。只有每次真的建立連線都留下一行字，玩家才分得出來。
+   */
+  readonly announceConnection?: boolean;
 }
 
 interface PendingRequest {
@@ -665,7 +672,24 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
         if (socket !== next || next.readyState !== 1) return;
         resubscribeAll(next);
         settleConnectionWaiters(currentStatus());
+        if (options.announceConnection === true) announceConnection(next);
       });
+  }
+
+  /** 只是給玩家看的回饋：送不出去就記錄，不影響連線本身。 */
+  function announceConnection(target: WebSocket): void {
+    const { host, port } = currentStatus();
+    const rawtext = [
+      { text: `§a✔ 已連上 Claude §7(${host}:${String(port)})` },
+      { text: '\n§7之後再打一次 /connect 不會有任何反應，那代表本來就連著。' },
+    ];
+    try {
+      void dispatch(target, `tellraw @a ${JSON.stringify({ rawtext })}`, options.commandTimeoutMs, true).then((outcome) => {
+        if (!outcome.ok) log('error', 'connection notice not shown', { detail: outcome.statusMessage });
+      });
+    } catch (error: unknown) {
+      log('error', 'connection notice not shown', { detail: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   return {

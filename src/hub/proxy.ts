@@ -14,6 +14,7 @@ import {
   hubLogFile,
   readHubState,
   requestHubShutdown,
+  sendKeepalive,
   type HubSettings,
   type HubState,
 } from './settings.js';
@@ -136,6 +137,8 @@ export async function runProxy(settings: HubSettings, version: string, wsPort: n
   }
 
   let upstream = connectUpstream(first);
+  let current = first;
+  let keepalive: NodeJS.Timeout | undefined;
   await upstream.start();
 
   async function reattach(replayInitialize: boolean): Promise<boolean> {
@@ -172,6 +175,7 @@ export async function runProxy(settings: HubSettings, version: string, wsPort: n
         if (initialized !== null) await candidate.send(initialized);
       }
       upstream = candidate;
+      current = state;
       log('info', 'reattached to the shared hub', { controlPort: state.controlPort });
       return true;
     })().finally(() => {
@@ -213,6 +217,7 @@ export async function runProxy(settings: HubSettings, version: string, wsPort: n
   const shutdown = async (reason: string): Promise<void> => {
     if (closing) return;
     closing = true;
+    clearInterval(keepalive);
     log('info', 'proxy shutting down', { reason });
     await upstream.terminateSession().catch(() => undefined);
     await upstream.close().catch(() => undefined);
@@ -232,6 +237,21 @@ export async function runProxy(settings: HubSettings, version: string, wsPort: n
   process.once('SIGTERM', () => void shutdown('SIGTERM'));
   process.stdout.on('error', () => void shutdown('stdout-error'));
   await stdio.start();
+
+  // 中樞只在「沒有遊戲、也沒有對話報到」滿閒置時限才關。對話開著就定期報到；
+  // 報到失敗代表中樞不在了，立刻重開，讓 /connect 的固定位址在任何對話開著時都有人接。
+  keepalive = setInterval(
+    () => {
+      if (closing || reattaching !== null) return;
+      void sendKeepalive(current).then(async (ok) => {
+        if (ok || closing) return;
+        log('info', 'shared hub missed a keepalive; restarting it', {});
+        await reattach(true);
+      });
+    },
+    Math.max(1_000, Math.min(60_000, Math.floor(settings.idleMs / 3))),
+  );
+  keepalive.unref();
 
   log('info', 'attached to the shared hub', {
     controlPort: first.controlPort,
