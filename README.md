@@ -168,7 +168,9 @@ corepack pnpm run connect
 
 > 早期版本有一個「閒置約 60 秒必斷線」的 bug：心跳只認 WebSocket pong frame，但 Bedrock／Education 的客戶端從不回 pong，導致健康的連線被自己的心跳終止。現已修正（改以任何進來的封包判定活性，並輔以應用層探測），閒置不應再造成斷線。若仍會斷，先確認你跑的是重新 build 過的 `dist/`。
 
-不要固定背 19131：桌面版、CLI、IDE 或多個 task 同時啟動時，後開的 MCP 可能取得不同空閒埠。永遠使用**目前要操作的那個 task**回報的指令。
+**連線指令固定是 `/connect 127.0.0.1:19131`**：同一台機器上所有 AI 對話（桌面版、CLI、IDE、多個 task）共用一個在背景執行的**中樞**，由它持有 19131 與唯一的遊戲連線；每個對話的 MCP 只是把請求轉給它。第一個需要它的對話會自動把中樞叫起來，沒有對話在用、遊戲也沒連著時，它約 10 分鐘後自己結束。換對話、換模型、重開 AI 工具都不會斷線，只有離開世界或重開 Minecraft 才需要重連。
+
+例外：如果 19131 已被舊版（沒有中樞功能）的 BlockHand 佔住，新對話會退回獨立模式、改用隨機埠——這時以該對話 `mc_status` 回報的指令為準；等舊對話全部關掉後就會恢復成共用中樞。
 
 ---
 
@@ -484,7 +486,11 @@ BlockHand 的管線是：
 | 變數 | 預設 | 說明 |
 |---|---|---|
 | `MINECRAFT_EDU_WS_HOST` | `127.0.0.1` | 監聽位址；預設只綁 loopback |
-| `MINECRAFT_EDU_WS_PORT` | `19131` | 優先監聽埠；實際值以 `mc_status` 回報為準 |
+| `MINECRAFT_EDU_WS_PORT` | `19131` | 遊戲連線埠。維持預設 19131 時使用共用中樞；設成其他值（例如 doctor／smoke 用的 `0`）則是一條隔離的獨立 bridge |
+| `MINECRAFT_EDU_HUB` | 自動 | `0` 強制不用中樞（每個對話各自一條 bridge，舊行為）；`1` 在自訂埠上也強制使用中樞 |
+| `MINECRAFT_EDU_HUB_PORT` | `19132` | 中樞給 AI 對話連的本機控制埠，同時是「誰當中樞」的選舉鎖 |
+| `MINECRAFT_EDU_HUB_DIR` | `~/.blockhand` | 中樞狀態檔 `hub.json`（含只有本機使用者可讀的存取金鑰）與日誌 `hub.log` |
+| `MINECRAFT_EDU_HUB_IDLE_MS` | `600000` | 沒有對話請求、且遊戲未連線超過這段時間，中樞自動結束；遊戲連著時永遠不會結束 |
 | `MINECRAFT_EDU_WS_PORT_FALLBACK` | `1` | 優先埠被其他 MCP 任務占用時，由作業系統自動配一個空閒埠；設成 `0` 可要求占埠即失敗 |
 | `MINECRAFT_EDU_COMMAND_TIMEOUT_MS` | `10000` | 單一指令等待遊戲回應的逾時 |
 | `MINECRAFT_EDU_KEEPALIVE_INTERVAL_MS` | `30000` | 閒置時送出保活探測（`time query daytime`）的間隔。調小可更快發現真的斷線，代價是更常打擾遊戲。需連續 3 次探測都毫無回應才終止連線 |
@@ -537,7 +543,9 @@ src/
 - **`agent setitem` 的參數順序未經證實**，目前沒有做成專用工具，需要時請走 `mc_run_command`。
 - **`@s` 在 WebSocket 指令下不一定能解析**：不同遊戲版本曾有無回應與正常解析兩種實測結果。`mc_query_target` 預設用 `@p`；自動 Undo 則必須成功取得 `querytarget @s` 的主世界維度，失敗時停止施工，不猜測作用中的世界。
 - **大型建造可能撞到 MCP Host 的請求逾時**：建造工具會逐條送出 fill 並等遊戲回應，實測半徑 6 的空心球（126 條）約需 13 秒，但遊戲繁忙時會更久。MCP client 預設逾時多為 60 秒，超過就會在 Host 端被砍斷（工具本身仍在跑）。先用 `mc_build_preview` 看 `fillBatches`，數量大時分批建造。
-- **每個 BlockHand 程序仍各自持有一個監聽埠**：STDIO client 關閉後，server 會同步關閉 Minecraft WebSocket 並釋放連接埠。AI 工具的桌面版同時載入多個任務，或桌面版／CLI／IDE 並行時，第一份會取得優先埠，其餘會自動取得空閒埠；請一律用目前任務的 `mc_status.connectCommand` 讓遊戲連到實際要操作的那一份。若需要固定埠，可替各 client 配不同的 `MINECRAFT_EDU_WS_PORT`，或把 `MINECRAFT_EDU_WS_PORT_FALLBACK` 設成 `0`。
+- **共用中樞一次只讓一個對話修改世界**：某個對話的寫入類工具（建造、fill、raw 指令、Agent 動作等）執行中時，另一個對話的寫入會立刻收到「另一個 AI 對話正在修改世界」並被拒絕，不會排隊、也不會和前一個建造穿插；唯讀工具不受影響。同一個對話的連續呼叫照順序執行。
+- **中樞更新**：重新 build 後，下一個連進來的對話會發現中樞是舊版；若遊戲沒連著就自動換成新版；遊戲連著時先沿用舊版、絕不中斷，等之後有對話連進來而遊戲剛好沒連著時再換。中樞的日誌在 `~/.blockhand/hub.log`。
+- **獨立模式（`MINECRAFT_EDU_HUB=0` 或自訂埠）下，每個 BlockHand 程序各自持有一個監聽埠**：第一份取得優先埠，其餘自動取得空閒埠，請用目前任務的 `mc_status.connectCommand`。
 - **加密握手會同步安裝解密器**：握手回覆與後續加密訊框可能在同一批資料內到達。adapter 在處理握手回覆時就切換加密，避免等待 `await` 期間遺失後續訊框、造成串流錯位。握手後仍以唯讀 `time query daytime` 確認加密通道有回應；探測失敗會保留加密狀態，並記錄 `primed post-handshake stream` 的 `ok` 與 `elapsedMs`。回歸測試涵蓋同批加密事件、第一筆指令、公鑰無法解析與不含公鑰的錯誤回覆。此修正已通過離線測試；與鍵盤、輸入法或背包失效的關係仍待實機確認。
 - **事件只在真正發生時觸發**：`BlockPlaced` 只在玩家親手放方塊時發出，`/setblock` 與 `/fill` 都不算。要收到事件必須先訂閱、再讓事件真的發生。
 - **網路連線與遊戲回應分開回報**：`mc_status.connected` 只代表 WebSocket 存在；`commandState` 的 `unknown`／`responsive`／`timed-out` 表示尚無證據、最近收到匹配的指令回覆、最近有指令逾時。`lastCommandResponseAt`／`lastCommandTimeoutAt` 保留相應時間，`inFlightCommands`／`queuedCommands` 顯示橋接這側還有多少工作。語法錯誤也能證明遊戲有回覆；`responsive` 不表示建造成功或輸入法正常。若遊戲背景暫停、指令處理卡住或回覆無法解析，可能出現 connected=true 而指令逾時；不能單憑此狀態判定是哪一種原因。

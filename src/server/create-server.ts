@@ -8,10 +8,14 @@ import { registerTools } from './register-tools.js';
 
 export const SERVER_NAME = 'minecraft-edu-mcp';
 
+export type WriteGuard = (tool: string, work: () => Promise<unknown>) => Promise<unknown>;
+
 export function createMcpServer(options: {
   readonly service: BlockHandService;
   readonly build: BuildService;
   readonly version: string;
+  /** Wraps every tool not annotated read-only; the shared hub uses it to serialize world writes across sessions. */
+  readonly guardWrite?: WriteGuard;
 }): McpServer {
   const server = new McpServer(
     { name: SERVER_NAME, version: options.version },
@@ -32,7 +36,22 @@ export function createMcpServer(options: {
     },
   );
 
+  if (options.guardWrite !== undefined) guardWriteTools(server, options.guardWrite);
   registerResources(server, options.service);
   registerTools(server, { service: options.service, build: options.build });
   return server;
+}
+
+type AnyHandler = (...args: unknown[]) => unknown;
+
+function guardWriteTools(server: McpServer, guard: WriteGuard): void {
+  const register = server.registerTool.bind(server) as unknown as (
+    name: string,
+    config: { readonly annotations?: { readonly readOnlyHint?: boolean } },
+    handler: AnyHandler,
+  ) => unknown;
+  (server as unknown as { registerTool: typeof register }).registerTool = (name, config, handler) =>
+    config.annotations?.readOnlyHint === true
+      ? register(name, config, handler)
+      : register(name, config, (...args: unknown[]) => guard(name, async () => await handler(...args)));
 }

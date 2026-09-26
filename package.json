@@ -22,6 +22,7 @@
     "test": "vitest run",
     "build": "tsc -p tsconfig.build.json",
     "smoke": "node scripts/stdio-smoke.mjs",
+    "hub-smoke": "node scripts/hub-smoke.mjs",
     "live": "node scripts/live-check.mjs",
     "blockhand": "node scripts/blockhand.mjs",
     "setup:codex": "node scripts/blockhand.mjs install --client=codex",
@@ -35,7 +36,7 @@
     "uninstall:gemini": "node scripts/blockhand.mjs uninstall --client=gemini",
     "uninstall:grok": "node scripts/blockhand.mjs uninstall --client=grok",
     "run-plan": "node scripts/run-tools.mjs",
-    "verify": "pnpm run typecheck && pnpm run test && pnpm run build && pnpm run smoke",
+    "verify": "pnpm run typecheck && pnpm run test && pnpm run build && pnpm run smoke && pnpm run hub-smoke",
     "start": "node dist/index.js"
   },
   "dependencies": {

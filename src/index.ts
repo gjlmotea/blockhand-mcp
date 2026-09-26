@@ -5,7 +5,10 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { composeRuntime, readRuntimeConfig } from './composition.js';
+import { composeRuntime, readRuntimeConfig, type RuntimeConfig } from './composition.js';
+import { runHub } from './hub/hub-server.js';
+import { runProxy } from './hub/proxy.js';
+import { readHubSettings } from './hub/settings.js';
 import { log } from './logger.js';
 import { createMcpServer } from './server/create-server.js';
 import { connectStdio } from './transports/stdio.js';
@@ -26,6 +29,19 @@ async function readVersion(): Promise<string> {
 export async function main(): Promise<void> {
   const version = await readVersion();
   const config = readRuntimeConfig();
+  const hub = readHubSettings(config);
+  if (process.argv.includes('--hub')) {
+    await runHub(version, config, hub);
+    return;
+  }
+  if (hub.enabled) {
+    if ((await runProxy(hub, version, config.port)) === 'attached') return;
+    log('info', 'shared hub unavailable; running a standalone bridge', { wsPort: config.port });
+  }
+  await runStandalone(version, config);
+}
+
+async function runStandalone(version: string, config: RuntimeConfig): Promise<void> {
   const runtime = composeRuntime(version, config);
   let server: ReturnType<typeof createMcpServer> | null = null;
   let bridgeStarted = false;

@@ -594,7 +594,8 @@ function connectGuide() {
     `BlockHand 不會操作前景視窗或替你輸入鍵盤。\n` +
     `請在目前的 AI 對話中呼叫 mc_status，查看它回傳的 connectCommand；進入已開啟 Cheats 的 Minecraft Education 世界後，手動輸入到聊天列。\n` +
     `重連時在聊天列按 T 再按 ↑ 就能叫回上一條指令。\n` +
-    `埠可能因同時開啟多個 MCP task 而變動，所以不要固定背 19131。\n`,
+    `所有 AI 對話共用同一個背景中樞，所以指令通常固定是 /connect 127.0.0.1:19131；\n` +
+    `只有 19131 被舊版 BlockHand 佔住、退回獨立模式時埠才會不同，這時以 mc_status 為準。\n`,
   );
 }
 
