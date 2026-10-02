@@ -20,7 +20,7 @@ corepack pnpm install --frozen-lockfile
 corepack pnpm run build
 ```
 
-Node 必須是專案 `.nvmrc` 指定的 **22.23.1**，pnpm 由 Corepack 固定為 **11.17.0**。Windows 與 Mac 都要在本機安裝依賴；不要把另一個作業系統的 `node_modules` 複製過來。Minecraft Education 目前在 Mac 的最低需求是 **macOS 14**。
+Node 必須是專案 `.nvmrc` 指定的 **24.21.0**，pnpm 由 Corepack 固定為 **11.17.0**。Windows 與 Mac 都要在本機安裝依賴；不要把另一個作業系統的 `node_modules` 複製過來。Minecraft Education 目前在 Mac 的最低需求是 **macOS 14**。
 
 ### 步驟二：在該機登記一次 MCP
 
@@ -118,7 +118,7 @@ env = { MINECRAFT_EDU_WS_PORT = "19131" }
 
 #### Windows 補充
 
-- Node 絕對路徑通常是 `C:\Program Files\nodejs\node.exe`，用 nvm-windows 則像 `C:\Users\<你>\AppData\Roaming\nvm\v22.23.1\node.exe`。
+- Node 絕對路徑通常是 `C:\Program Files\nodejs\node.exe`，用 nvm-windows 則像 `C:\Users\<你>\AppData\Roaming\nvm\v24.21.0\node.exe`。
 - JSON 設定檔裡的反斜線要跳脫：`"C:\\Program Files\\nodejs\\node.exe"`。TOML 可以改用單引號字面字串：`command = 'C:\Program Files\nodejs\node.exe'`。
 - Minecraft Education 若是 Microsoft Store 的 UWP 版，loopback 會被 Windows 應用程式隔離擋住，需要額外的 `CheckNetIsolation LoopbackExempt` 豁免（見第 8 節）。
 

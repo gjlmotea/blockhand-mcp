@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { CLIENTS, CLIENT_IDS, resolveClient } from '../../scripts/lib/mcp-clients.mjs';
 import { createDesiredRegistration } from '../../scripts/lib/mcp-registration.mjs';
 
-const NODE = '/Users/墨茶/.nvm/versions/node/v22.23.1/bin/node';
+const NODE = '/Users/墨茶/.nvm/versions/node/v24.21.0/bin/node';
 const LAUNCHER = '/Users/墨茶/My Projects/minecraft-edu/scripts/launch-mcp.mjs';
 const desired = createDesiredRegistration({ nodePath: NODE, launcherPath: LAUNCHER });
 

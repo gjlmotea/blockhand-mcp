@@ -1,7 +1,7 @@
 import { posix, win32 } from 'node:path';
 
 export const MCP_NAME = 'minecraft-edu';
-export const REQUIRED_NODE_VERSION = '22.23.1';
+export const REQUIRED_NODE_VERSION = '24.21.0';
 
 export const REQUIRED_ENV = Object.freeze({
   MINECRAFT_EDU_WS_HOST: '127.0.0.1',

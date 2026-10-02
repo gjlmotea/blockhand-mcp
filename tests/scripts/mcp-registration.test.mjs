@@ -21,7 +21,7 @@ const macPaths = {
   distPath: '/Users/墨茶/My Projects/minecraft-edu/dist/index.js',
 };
 const macDesired = createDesiredRegistration({
-  nodePath: '/Users/墨茶/.nvm/versions/node/v22.23.1/bin/node',
+  nodePath: '/Users/墨茶/.nvm/versions/node/v24.21.0/bin/node',
   launcherPath: macPaths.launcherPath,
 });
 
@@ -96,7 +96,7 @@ describe('Codex registration classification', () => {
   it('接受同一工作樹既有的 direct-dist entry，不強迫 remove/add', () => {
     const existing = entryWith({
       transport: {
-        command: '/opt/homebrew/Cellar/node@22/22.23.1/bin/node',
+        command: '/opt/homebrew/Cellar/node@24/24.21.0/bin/node',
         args: [macPaths.distPath],
       },
     });

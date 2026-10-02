@@ -6,7 +6,7 @@
   "description": "BlockHand（積木之手）：透過 Minecraft Education 的 /wsserver 連線命令提供 Agent 動作、世界讀寫、幾何建造、事件訂閱與受控指令的 MCP server。",
   "license": "MIT",
   "engines": {
-    "node": "22.23.1"
+    "node": "24.21.0"
   },
   "packageManager": "pnpm@11.17.0",
   "main": "./dist/index.js",

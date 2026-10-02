@@ -29,7 +29,7 @@ corepack pnpm run setup:codex
 corepack pnpm run doctor
 ```
 
-安裝器以 `realpath(process.execPath)` 登記該機的 Node 22.23.1，並把絕對路徑指向 `scripts/launch-mcp.mjs`。launcher 再從自己的位置載入 `dist/index.js`，不依賴工作目錄或 GUI 程式的 shell PATH。專案搬移、Node 位置改變或升級 Node 後，必須重新登記。
+安裝器以 `realpath(process.execPath)` 登記該機的 Node 24.21.0，並把絕對路徑指向 `scripts/launch-mcp.mjs`。launcher 再從自己的位置載入 `dist/index.js`，不依賴工作目錄或 GUI 程式的 shell PATH。專案搬移、Node 位置改變或升級 Node 後，必須重新登記。
 
 安裝狀態機刻意保守：
 
@@ -51,7 +51,7 @@ PowerShell 自動輸入已移除，macOS 也不加入 AppleScript、Accessibilit
 3. 手動輸入該 task 回傳的 `/connect 127.0.0.1:<actual-port>`。
 4. 再呼叫 `mc_status`，確認 `connected=true`；若遊戲要求加密，確認 `encrypted=true`。
 
-`doctor` 的一般 lifecycle smoke 與「Codex 實際 entry smoke」都強制用 port 0 取得隔離埠；不會搶正在使用的 19131。它同時驗證登記的 Node 是存在的絕對路徑且版本為 22.23.1。Apple Silicon 若透過 Rosetta 執行，會用 `sysctl.proc_translated` 額外標示。
+`doctor` 的一般 lifecycle smoke 與「Codex 實際 entry smoke」都強制用 port 0 取得隔離埠；不會搶正在使用的 19131。它同時驗證登記的 Node 是存在的絕對路徑且版本為 24.21.0。Apple Silicon 若透過 Rosetta 執行，會用 `sysctl.proc_translated` 額外標示。
 
 ## 官方依據與協定邊界
 
@@ -59,7 +59,7 @@ PowerShell 自動輸入已移除，macOS 也不加入 AppleScript、Accessibilit
 - [Minecraft Education 系統需求](https://edusupport.minecraft.net/hc/en-us/articles/360047556591-System-Requirements)：目前 Mac 最低需求為 macOS 14。
 - [Microsoft `/wsserver` 指令文件](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/commandsreference/examples/commands/wsserver?view=minecraft-bedrock-stable)：`/connect` 是 alias，指令用來連到 WebSocket URI，需 Admin 與 Cheats。
 - [Minecraft Education Classroom Mode 指南](https://edusupport.minecraft.net/hc/en-us/articles/360047116652-Get-Started-with-Classroom-Mode)：官方提供 Mac companion workflow，並要求使用者以 `/connect` 連線。
-- [Node 22.23.1 發行頁](https://nodejs.org/en/blog/release/v22.23.1/)：同版提供 macOS Apple Silicon 與 Intel binaries。
+- [Node 24.21.0 發行頁](https://nodejs.org/en/blog/release/v24.21.0/)：同版提供 macOS Apple Silicon 與 Intel binaries。
 - [Apple Firewall 設定](https://support.apple.com/guide/mac-help/change-firewall-settings-on-mac-mh11783/mac)：若真機連線失敗，可檢查是否封鎖 Node 的 incoming connection；程式不會自行放寬設定。
 
 官方文件化的是 `/wsserver`／`/connect` 連線 command surface；連線後的 request、response、event 與加密訊息格式沒有公開穩定性承諾。BlockHand 對這一層的支援來自實測與回歸測試，遊戲更新後仍可能需要調整。
@@ -69,7 +69,7 @@ PowerShell 自動輸入已移除，macOS 也不加入 AppleScript、Accessibilit
 | 項目 | Apple Silicon | Intel | 完成條件 |
 |---|---:|---:|---|
 | macOS 14+ clean install | 必測 | 有機器時測 | 不複製 Windows `node_modules`，frozen install 成功 |
-| Node／pnpm | 必測 | 必測 | Node 22.23.1、pnpm 11.17.0，Node 架構與預期一致 |
+| Node／pnpm | 必測 | 必測 | Node 24.21.0、pnpm 11.17.0，Node 架構與預期一致 |
 | 專案 verify | 必測 | 必測 | typecheck、全部 tests、build、launcher stdio smoke 全過 |
 | Finder 啟動 Codex Desktop | 必測 | 必測 | 沒有 shell PATH 仍載入 38 tools／2 resources |
 | 同機共用設定 | 必測 | 必測 | Desktop、CLI、IDE 都讀到 `minecraft-edu` entry |
@@ -84,7 +84,7 @@ PowerShell 自動輸入已移除，macOS 也不加入 AppleScript、Accessibilit
 
 ## 常見失敗
 
-- `doctor` 說 Node 版本不符：切回 22.23.1，再重跑 build 與 setup。
+- `doctor` 說 Node 版本不符：切回 24.21.0，再重跑 build 與 setup。
 - `doctor` 說同名 entry 不相容：先確認是否是另一份 clone；工具不會替你刪。
 - Codex 看不到 MCP：完全退出並重啟；只開新 task 不一定會重載桌面程序的 MCP 設定。
 - 遊戲拒絕 `/connect`：確認已進世界、Cheats 開啟、操作者具 Admin／OP，並使用 `mc_status` 的實際埠。
