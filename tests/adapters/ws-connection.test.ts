@@ -764,6 +764,7 @@ describe('ws adapter', () => {
     const text = (JSON.parse(commandLine.slice('tellraw @a '.length)) as { rawtext: Array<{ text: string }> })
       .rawtext.map((part) => part.text).join('');
     expect(text).toContain('已連上 Claude');
+    expect(text).toContain('/reload all 也不會斷線');
     expect(text).toContain(`127.0.0.1:${String(port)}`);
     expect(connection.status().commandsIssued).toBe(0);
   });

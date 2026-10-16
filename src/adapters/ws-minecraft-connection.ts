@@ -681,7 +681,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
     const { host, port } = currentStatus();
     const rawtext = [
       { text: `§a✔ 已連上 Claude §7(${host}:${String(port)})` },
-      { text: '\n§7之後再打一次 /connect 不會有任何反應，那代表本來就連著。' },
+      { text: '\n§7之後再打一次 /connect 不會有任何反應，那代表本來就連著；/reload all 也不會斷線，不用重連。' },
     ];
     try {
       void dispatch(target, `tellraw @a ${JSON.stringify({ rawtext })}`, options.commandTimeoutMs, true).then((outcome) => {
