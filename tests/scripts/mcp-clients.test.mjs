@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { CLIENTS, CLIENT_IDS, resolveClient } from '../../scripts/lib/mcp-clients.mjs';
@@ -119,8 +121,8 @@ describe('讀取策略與 client 解析', () => {
   });
 
   it('設定檔路徑以傳入的 home 計算，不寫死使用者目錄', () => {
-    expect(CLIENTS.claude.read.configPath('/home/x')).toBe('/home/x/.claude.json');
-    expect(CLIENTS.gemini.read.configPath('/home/x')).toBe('/home/x/.gemini/settings.json');
+    expect(CLIENTS.claude.read.configPath('/home/x')).toBe(join('/home/x', '.claude.json'));
+    expect(CLIENTS.gemini.read.configPath('/home/x')).toBe(join('/home/x', '.gemini', 'settings.json'));
   });
 
   it('每家都有各自的 CLI 路徑覆寫環境變數', () => {
