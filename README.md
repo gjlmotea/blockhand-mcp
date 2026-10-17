@@ -218,7 +218,7 @@ doctor 不修改持久設定、不啟動 Minecraft；它會短暫建立隔離的
 遊戲開著、世界已載入、作弊已開之後：
 
 ```bash
-cd gjlmotea/vibe/mcp/minecraft-edu && corepack pnpm run live
+cd gjlmotea/vibe/minecraft/mcp && corepack pnpm run live
 ```
 
 腳本會印出要輸入的 `/connect`，等你連上，然後走完一條完整路徑並逐項回報 PASS／FAIL：連線 → 讀玩家座標 → 遊戲內發話 → 設定時間 → 召喚 Agent → 感測 → 走 L 形路徑 → 預覽建造 → 蓋空心玻璃球 → 回頭驗證方塊真的存在 → 藍圖合併 → 訂閱並收事件 → 政策閘門 → 清除示範建築。
@@ -251,13 +251,13 @@ server instructions 裡也放了同一條線索，所以 AI 在行為可疑時�
 預設會把示範建築填回 `air`，不在世界裡留垃圾。想留下來看：
 
 ```bash
-cd gjlmotea/vibe/mcp/minecraft-edu && node scripts/live-check.mjs --keep
+cd gjlmotea/vibe/minecraft/mcp && node scripts/live-check.mjs --keep
 ```
 
 不需要開遊戲的驗證（型別、測試、build、stdio 握手、STDIN 關閉釋放連接埠與占埠失敗一次跑完）：
 
 ```bash
-cd gjlmotea/vibe/mcp/minecraft-edu && corepack pnpm run verify
+cd gjlmotea/vibe/minecraft/mcp && corepack pnpm run verify
 ```
 
 ---
