@@ -16,7 +16,7 @@ import {
   coordinateSchema,
   selectorSchema,
 } from '../schemas.js';
-import { fail, guard, ok, outcomeToPayload, summarizeOutcome, toCoordinate } from '../tool-kit.js';
+import { fail, guard, notInWorldHint, ok, outcomeToPayload, summarizeOutcome, toCoordinate } from '../tool-kit.js';
 
 export function registerWorldTools(server: McpServer, service: BlockHandService): void {
   server.registerTool(
@@ -143,7 +143,7 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
         );
         return ok(
           { ...outcomeToPayload(outcome), matches: outcome.ok },
-          outcome.ok ? `符合：該座標是 ${block}。` : `不符合：${outcome.statusMessage ?? '該座標不是指定方塊'}`,
+          outcome.ok ? `符合：該座標是 ${block}。` : `不符合：${outcome.statusMessage ?? '該座標不是指定方塊'}${notInWorldHint(outcome)}`,
         );
       }),
   );
@@ -265,7 +265,7 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
             `讀不出 ${String(position.x)},${String(position.y)},${String(position.z)} 的方塊名稱。` +
               '**這不代表那裡是空的**——是遊戲回的訊息格式不符合預期，本工具無法判定。' +
               '最可能的原因是 Minecraft 改版改了訊息文字，或遊戲語言不是繁中／簡中／英文。' +
-              `請用 mc_verify_reading 確認解析路徑是否仍然有效。遊戲原始訊息：${reading.raw ?? '(無)'}`,
+              `請用 mc_verify_reading 確認解析路徑是否仍然有效。遊戲原始訊息：${reading.raw ?? '(無)'}${notInWorldHint(outcome)}`,
           );
         }
 
@@ -362,7 +362,7 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
           { ...outcomeToPayload(outcome), identical: outcome.ok },
           outcome.ok
             ? `兩個區域一致${masked ? '（忽略空氣）' : ''}。`
-            : `不一致：${outcome.statusMessage ?? '區域內容有差異'}`,
+            : `不一致：${outcome.statusMessage ?? '區域內容有差異'}${notInWorldHint(outcome)}`,
         );
       }),
   );
@@ -388,7 +388,7 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
           { ...outcomeToPayload(outcome), details },
           outcome.ok
             ? `已取得 ${target} 的位置資料。`
-            : `查詢失敗：${outcome.statusMessage ?? '找不到目標'}`,
+            : `查詢失敗：${outcome.statusMessage ?? '找不到目標'}${notInWorldHint(outcome)}`,
         );
       }),
   );

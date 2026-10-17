@@ -71,12 +71,34 @@ export function batchToPayload(batch: BatchOutcome): Record<string, unknown> {
   };
 }
 
+/** 遊戲內建、任何開了作弊的世界都認得的指令。 */
+const BUILT_IN_VERBS = new Set([
+  'ability', 'agent', 'camera', 'clear', 'clone', 'effect', 'execute', 'fill', 'function', 'gamemode', 'gamerule',
+  'give', 'hud', 'kill', 'list', 'particle', 'playsound', 'querytarget', 'replaceitem', 'say', 'scoreboard',
+  'scriptevent', 'setblock', 'structure', 'summon', 'teleport', 'tellraw', 'testfor', 'testforblock',
+  'testforblocks', 'time', 'title', 'titleraw', 'tp', 'weather',
+]);
+
+/** 遊戲回「不明的指令」的兩種語系（commands.generic.unknown）。 */
+const UNKNOWN_COMMAND = /^(?:不明的指令：|Unknown command: )([^。.\s]+)/u;
+
+/**
+ * 內建指令也回「不明的指令」時，多半不是指令錯了，而是遊戲不在世界裡：
+ * 回到主選單或世界清單時橋接仍然連著，但所有指令都被當成不認得。
+ */
+export function notInWorldHint(outcome: CommandOutcome): string {
+  if (outcome.ok || outcome.statusMessage === null) return '';
+  const verb = UNKNOWN_COMMAND.exec(outcome.statusMessage)?.[1]?.toLowerCase();
+  if (verb === undefined || !BUILT_IN_VERBS.has(verb)) return '';
+  return `（${verb} 是內建指令卻被當成不認得：遊戲多半不在世界裡，例如回到主選單或世界清單，或世界沒開作弊。先截圖確認畫面。）`;
+}
+
 export function summarizeOutcome(outcome: CommandOutcome): string {
   const undoNote=outcome.undo ? ` ${outcome.undo.reason ?? ''}（備份 ${outcome.undo.storedBlocks} 格／${outcome.undo.snapshotCount} 區）` : '';
   if (outcome.ok) {
     return (outcome.statusMessage ?? `已執行：${outcome.commandLine}`)+undoNote;
   }
-  return `失敗：${outcome.commandLine}｜${outcome.statusMessage ?? '遊戲沒有回報原因'}`+undoNote;
+  return `失敗：${outcome.commandLine}｜${outcome.statusMessage ?? '遊戲沒有回報原因'}${notInWorldHint(outcome)}`+undoNote;
 }
 
 export function summarizeBatch(batch: BatchOutcome, label: string): string {
@@ -84,7 +106,7 @@ export function summarizeBatch(batch: BatchOutcome, label: string): string {
   if (batch.ok) {
     return `${label}：${String(batch.succeeded)} 條指令全部成功，用時 ${String(batch.elapsedMs)} ms。`+undoNote;
   }
-  const reason = batch.firstFailure?.statusMessage ?? '遊戲沒有回報原因';
+  const reason = (batch.firstFailure?.statusMessage ?? '遊戲沒有回報原因') + (batch.firstFailure ? notInWorldHint(batch.firstFailure) : '');
   return `${label}：${String(batch.succeeded)}/${String(batch.issued)} 成功，${String(batch.failed)} 失敗。首個失敗：${batch.firstFailure?.commandLine ?? '未知'}｜${reason}`+undoNote;
 }
 

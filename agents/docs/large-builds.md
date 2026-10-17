@@ -46,7 +46,7 @@
 200 × 32,768 = 6,553,600 方塊 / 次呼叫
 ```
 
-而 `mc_build_shape` 單次上限 20 萬（預設）。大地工程一律自己算座標走 `mc_run_commands`，不要用 shape 工具。
+而 `mc_build_shape` 要先在 server 端把整個形狀算完，受 `maxBuildBlocks`（現行預設 4000 萬）與非實心形狀 800 萬掃描體積限制。大地工程一律自己算座標走 `mc_run_commands`，數量再大就寫成 `.mcfunction`，不要用 shape 工具。
 
 反過來說，**曲面和收分造型才用 `mc_build_shape`**，因為幾何算好了。
 

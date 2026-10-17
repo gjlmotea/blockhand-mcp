@@ -15,6 +15,8 @@
  * 預設開啟，未完成握手前遊戲會靜默丟棄所有指令，詳見 ws-encryption.ts。
  */
 
+import type { IncomingMessage as HttpRequest } from 'node:http';
+import type { Duplex } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -681,7 +683,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
     const { host, port } = currentStatus();
     const rawtext = [
       { text: `§a✔ 已連上 Claude §7(${host}:${String(port)})` },
-      { text: '\n§7之後再打一次 /connect 不會有任何反應，那代表本來就連著；/reload all 也不會斷線，不用重連。' },
+      { text: '\n§7之後不用再打 /connect：連著時再打，遊戲不會顯示任何字。/reload all、換世界通常也不會斷線。' },
     ];
     try {
       void dispatch(target, `tellraw @a ${JSON.stringify({ rawtext })}`, options.commandTimeoutMs, true).then((outcome) => {
@@ -714,6 +716,23 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
           created.once('listening', onListening);
           created.on('connection', (incoming: WebSocket) => {
             attachSocket(incoming);
+          });
+          // 握手被拒的連線不會觸發 'connection'。記下來，才分得出「遊戲根本沒連過來」和「連過來但被擋」。
+          // 掛了這個 listener，ws 就不再自己回 400 關掉 socket，所以這裡要自己關。
+          created.on('wsClientError', (error: Error, rejected: Duplex, request: HttpRequest) => {
+            log('error', 'websocket handshake rejected', {
+              detail: error.message,
+              userAgent: request.headers['user-agent'] ?? null,
+            });
+            if (!rejected.writable) {
+              rejected.destroy();
+              return;
+            }
+            // 跟 ws 自己拒絕時回的一樣：方法錯回 405，版本錯附上支援的版本。
+            const status = error.message === 'Invalid HTTP method' ? '405 Method Not Allowed' : '400 Bad Request';
+            const version = error.message.includes('Sec-WebSocket-Version') ? 'Sec-WebSocket-Version: 13, 8\r\n' : '';
+            rejected.once('finish', () => rejected.destroy());
+            rejected.end(`HTTP/1.1 ${status}\r\nConnection: close\r\n${version}\r\n`);
           });
         });
 

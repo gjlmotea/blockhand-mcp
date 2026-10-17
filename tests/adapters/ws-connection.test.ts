@@ -5,7 +5,8 @@
  */
 
 import { WebSocket, WebSocketServer } from 'ws';
-import { afterEach, describe, expect, it } from 'vitest';
+import { connect } from 'node:net';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createWsMinecraftConnection } from '../../src/adapters/ws-minecraft-connection.js';
 import type { MinecraftConnection } from '../../src/ports/minecraft-connection.js';
@@ -764,9 +765,73 @@ describe('ws adapter', () => {
     const text = (JSON.parse(commandLine.slice('tellraw @a '.length)) as { rawtext: Array<{ text: string }> })
       .rawtext.map((part) => part.text).join('');
     expect(text).toContain('已連上 Claude');
-    expect(text).toContain('/reload all 也不會斷線');
+    expect(text).toContain('/reload all、換世界通常也不會斷線');
+    expect(text).toContain('不用再打 /connect');
     expect(text).toContain(`127.0.0.1:${String(port)}`);
     expect(connection.status().commandsIssued).toBe(0);
+  });
+
+  it('握手被拒時記一筆日誌並關掉 socket，不讓它掛著', async () => {
+    const connection = createWsMinecraftConnection({
+      host: '127.0.0.1',
+      port: 0,
+      fallbackToRandomPort: false,
+      commandTimeoutMs: 500,
+      eventBufferSize: 10,
+      debugFrames: false,
+      negotiateEncryption: false,
+    });
+    active = connection;
+    await connection.start();
+    const written: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
+      written.push(String(chunk));
+      return true;
+    });
+    try {
+      const reply = await new Promise<string>((resolve, reject) => {
+        const raw = connect(connection.status().port, '127.0.0.1');
+        let text = '';
+        raw.on('data', (data: Buffer) => { text += data.toString(); });
+        raw.on('close', () => resolve(text));
+        raw.on('error', reject);
+        // 缺 Sec-WebSocket-Key：ws 會拒絕這個升級要求
+        raw.write('GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\n\r\n');
+      });
+      expect(reply.startsWith('HTTP/1.1 400')).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(written.some((line) => line.includes('websocket handshake rejected'))).toBe(true);
+    expect(connection.status().connected).toBe(false);
+  });
+
+  it('握手被拒時保留 ws 原本的狀態碼：方法錯是 405', async () => {
+    const connection = createWsMinecraftConnection({
+      host: '127.0.0.1',
+      port: 0,
+      fallbackToRandomPort: false,
+      commandTimeoutMs: 500,
+      eventBufferSize: 10,
+      debugFrames: false,
+      negotiateEncryption: false,
+    });
+    active = connection;
+    await connection.start();
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const reply = await new Promise<string>((resolve, reject) => {
+        const raw = connect(connection.status().port, '127.0.0.1');
+        let text = '';
+        raw.on('data', (data: Buffer) => { text += data.toString(); });
+        raw.on('close', () => resolve(text));
+        raw.on('error', reject);
+        raw.write('POST / HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nContent-Length: 0\r\n\r\n');
+      });
+      expect(reply.startsWith('HTTP/1.1 405')).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('未連線時 runCommand 丟出帶連線指示的錯誤', async () => {

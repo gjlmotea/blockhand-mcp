@@ -15,7 +15,7 @@
 import { MinecraftBridgeError } from './contracts.js';
 
 /** 會讓遊戲離開這個橋接、或把遊戲指向別的 WebSocket 端點的指令。 */
-const BRIDGE_BREAKING = new Set(['wsserver', 'connect']);
+const BRIDGE_BREAKING = new Set(['wsserver', 'connect', 'closewebsocket']);
 
 /** 影響範圍是整個世界或全體玩家、預期需要 Host 確認的指令。 */
 const WIDE_EFFECT = new Set([
@@ -53,6 +53,21 @@ export interface CommandAssessment {
 }
 
 /**
+ * `execute` 包著的指令裡有沒有斷線指令。不照語法逐個解析子指令（玩家名稱可以叫 `run`、
+ * 可以加引號帶空白，照參數位置找很容易漏），而是保守地看：`execute` 後面任何一個獨立的字
+ * 是斷線指令就算。代價是極少數合法指令會被誤擋（例如 `execute … say connect`），改用不包
+ * `execute` 的寫法即可；斷線指令寧可多擋。
+ */
+function breakingInsideExecute(commandLine: string): string | undefined {
+  const tokens = commandLine.split(/\s+/).filter((token) => token !== '');
+  if ((tokens[0] ?? '').toLowerCase() !== 'execute') return undefined;
+  return tokens
+    .slice(1)
+    .map((token) => token.replace(/^\/+/, '').toLowerCase())
+    .find((token) => BRIDGE_BREAKING.has(token));
+}
+
+/**
  * 正規化並驗證一行 raw 指令。
  * 通過即回傳去掉前導 `/` 的單行指令與風險等級；不通過一律丟錯，不做「盡力猜測」。
  */
@@ -82,10 +97,11 @@ export function assessRawCommand(input: string): CommandAssessment {
 
   const verb = (normalized.split(/\s+/)[0] ?? '').toLowerCase();
 
-  if (BRIDGE_BREAKING.has(verb)) {
+  const breaking = BRIDGE_BREAKING.has(verb) ? verb : breakingInsideExecute(normalized);
+  if (breaking !== undefined) {
     throw new MinecraftBridgeError(
       'command-forbidden',
-      `拒絕執行 ${verb}：這會切斷或改指向本 MCP 的 WebSocket 橋接，之後所有工具都會失效。` +
+      `拒絕執行 ${breaking}：這會切斷或改指向本 MCP 的 WebSocket 橋接，之後所有工具都會失效。` +
         '需要換連線目標時請由使用者自己在遊戲內輸入。',
     );
   }

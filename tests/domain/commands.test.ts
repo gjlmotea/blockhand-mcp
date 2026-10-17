@@ -136,6 +136,28 @@ describe('assessRawCommand', () => {
   it('拒絕會切斷橋接的指令', () => {
     expect(() => assessRawCommand('/connect evil.example.com:80')).toThrow(/切斷/);
     expect(() => assessRawCommand('wsserver localhost:1234')).toThrow(/切斷/);
+    expect(() => assessRawCommand('/closewebsocket')).toThrow(/切斷/);
+  });
+
+  it('包在 execute 裡的斷線指令也拒絕', () => {
+    expect(() => assessRawCommand('execute @p ~ ~ ~ closewebsocket')).toThrow(/closewebsocket/);
+    expect(() => assessRawCommand('execute as @a at @s run connect 127.0.0.1:1')).toThrow(/connect/);
+    expect(() => assessRawCommand('execute @a ~ ~ ~ detect ~ ~-1 ~ stone 0 wsserver x')).toThrow(/wsserver/);
+    expect(() => assessRawCommand('execute @a ~ ~ ~ execute @s ~ ~ ~ /closewebsocket')).toThrow(/closewebsocket/);
+    // 玩家名稱叫 run、名稱帶空白：照參數位置找會漏掉的寫法
+    expect(() => assessRawCommand('execute as run run closewebsocket')).toThrow(/closewebsocket/);
+    expect(() => assessRawCommand('execute "Player One" ~ ~ ~ closewebsocket')).toThrow(/closewebsocket/);
+  });
+
+  it('不在 execute 裡、或包在引號與 JSON 裡的字不算', () => {
+    expect(assessRawCommand('say connect').verb).toBe('say');
+    expect(assessRawCommand('tellraw @a {"rawtext":[{"text":"closewebsocket"}]}').verb).toBe('tellraw');
+    expect(assessRawCommand('execute as @a run tellraw @s {"rawtext":[{"text":"connect"}]}').verb).toBe('execute');
+    expect(assessRawCommand('execute as "connect" run say hi').verb).toBe('execute');
+  });
+
+  it('寧可多擋：execute 裡單獨出現 connect 這個字就拒絕', () => {
+    expect(() => assessRawCommand('execute @p ~ ~ ~ say connect')).toThrow(/connect/);
   });
 
   it('拒絕用換行串接多條指令', () => {

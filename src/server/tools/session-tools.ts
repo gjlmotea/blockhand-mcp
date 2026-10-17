@@ -11,6 +11,10 @@ import {
 } from '../schemas.js';
 import { batchToPayload, guard, ok, outcomeToPayload, summarizeBatch, summarizeOutcome } from '../tool-kit.js';
 
+/** 連上之後給 AI 的提醒：連著時重打 /connect 遊戲什麼都不顯示，玩家會以為卡住。 */
+const ALREADY_CONNECTED_HINT =
+  '不用再請玩家打 /connect：連著時再打，遊戲不會顯示任何字，玩家容易以為卡住。正常的 /reload all、換世界不會斷線。';
+
 export function registerSessionTools(server: McpServer, service: BlockHandService): void {
   server.registerTool('mc_undo_control', {
     title:'查看或設定單步復原',
@@ -54,7 +58,7 @@ export function registerSessionTools(server: McpServer, service: BlockHandServic
           status.connected
             ? (status.commandState === 'timed-out'
                 ? '網路已連上，但最近指令未獲回覆；尚未確認遊戲可執行操作。'
-                : `已連線（第 ${String(status.connectionCount)} 次），累計送出 ${String(status.commandsIssued)} 條指令。`) +
+                : `已連線（第 ${String(status.connectionCount)} 次），累計送出 ${String(status.commandsIssued)} 條指令。${ALREADY_CONNECTED_HINT}`) +
               (saved.length === 0
                 ? ''
                 : `本次存過的結構：${saved.map((entry) => `${entry.name}（${entry.saveMode}）`).join('、')}。`)
@@ -83,7 +87,7 @@ export function registerSessionTools(server: McpServer, service: BlockHandServic
           status.connected
             ? status.commandState === 'timed-out'
               ? '網路已連上，但最近指令未獲回覆；請先確認遊戲畫面與回應狀態。'
-              : 'Minecraft 已連上橋接。'
+              : `Minecraft 已連上橋接。${ALREADY_CONNECTED_HINT}`
             : `等待 ${String(timeoutSeconds)} 秒後仍未連上。請確認遊戲內已輸入 ${status.connectCommand}，且世界開啟了作弊。`,
         );
       }),
@@ -94,7 +98,7 @@ export function registerSessionTools(server: McpServer, service: BlockHandServic
     {
       title: '執行單一 slash 指令',
       description:
-        '送出一條原始 slash 指令，涵蓋本 server 沒有專用工具的功能。只接受單行、不得換行串接，並拒絕 wsserver／connect（那會切斷本橋接）。前導斜線可有可無。',
+        '送出一條原始 slash 指令，涵蓋本 server 沒有專用工具的功能。只接受單行、不得換行串接，並拒絕 wsserver／connect／closewebsocket，包括包在 execute 裡的（那會切斷本橋接）。前導斜線可有可無。',
       inputSchema: z
         .object({
           command: z.string().min(1).max(1024).describe('例如 "time set day" 或 "/give @s diamond 1"'),
