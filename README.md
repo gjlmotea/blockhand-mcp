@@ -1,8 +1,8 @@
 # BlockHand — MCP server for Minecraft Education
 
-**English** | [繁體中文](README.zh-TW.md)
+**English** | [繁體中文](https://github.com/gjlmotea/blockhand-mcp/blob/main/README.zh-TW.md)
 
-![BlockHand: an MCP server for Minecraft Education Edition](assets/social-preview.png)
+![BlockHand: an MCP server for Minecraft Education Edition](https://github.com/gjlmotea/blockhand-mcp/raw/main/assets/social-preview.png)
 
 BlockHand gives AI agents hands and eyes inside **Minecraft Education Edition**. Claude Code, Codex, Gemini CLI, Grok or any other [Model Context Protocol](https://modelcontextprotocol.io) client can drive the Agent robot, build structures, read blocks, compare regions and react to game events.
 
@@ -10,7 +10,7 @@ It talks to the game only through Minecraft Education's built-in `/connect` (`/w
 
 - **44 tools and 2 resources**: Agent robot control, world edits, 24 build shapes, blueprints, block reading, region comparison, symmetry checks and event subscription.
 - **Fast building**: shapes are merged into the fewest possible `/fill` commands (a solid sphere of radius 8 goes from 2,000+ blocks to under 200 commands).
-- **Local only**: the WebSocket listens on `127.0.0.1`, with no accounts, tokens or secrets.
+- **Local by default**: the game WebSocket listens on `127.0.0.1` unless `MINECRAFT_EDU_WS_HOST` changes it, and no account or online service is involved.
 - **One fixed address**: every AI session on the machine shares one background hub, so the game always connects with `/connect 127.0.0.1:19131`.
 - **Installers** for Claude Code, Codex, Gemini CLI and Grok CLI when you run from source.
 
@@ -53,7 +53,7 @@ Codex:
 codex mcp add blockhand -- npx -y @gjlmotea/blockhand-mcp
 ```
 
-Any client that uses a JSON config (Claude Desktop, Gemini CLI, Cursor, VS Code and others):
+Clients that read an `mcpServers` JSON config (Claude Desktop, Cursor, Gemini CLI):
 
 ```json
 {
@@ -65,6 +65,31 @@ Any client that uses a JSON config (Claude Desktop, Gemini CLI, Cursor, VS Code 
   }
 }
 ```
+
+VS Code uses a top-level `servers` key instead, and each server has a `type`:
+
+```json
+{
+  "servers": {
+    "blockhand": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@gjlmotea/blockhand-mcp"]
+    }
+  }
+}
+```
+
+Where each client keeps the file:
+
+| Client | Config file |
+|---|---|
+| Claude Desktop | macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`; Windows: `%APPDATA%\Claude\claude_desktop_config.json`. **Settings → Developer → Edit Config** opens it |
+| Cursor | `~/.cursor/mcp.json` for every project, `.cursor/mcp.json` inside one project |
+| Gemini CLI | `~/.gemini/settings.json` (user), `.gemini/settings.json` (project) |
+| VS Code | `.vscode/mcp.json` in the workspace, or the user `mcp.json` that the **MCP: Open User Configuration** command opens |
+
+Sources: [Claude Desktop](https://modelcontextprotocol.io/docs/develop/connect-local-servers), [Cursor](https://cursor.com/docs/context/mcp), [Gemini CLI](https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md), [VS Code](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration).
 
 Desktop apps started from Finder or the Start menu often do not see your shell's `PATH`. If the server fails to start with a vague "server not responding" error, replace `npx` with its absolute path (`which npx` on macOS, `where npx` on Windows).
 
@@ -242,7 +267,7 @@ shape parameters → inside() test over the bounding box → set of block coordi
 
 The merge is deterministic, and tests pin that the merged batches cover exactly the original set of blocks, no more and no less. Hollow shapes all come from the same "inside test plus shell-neighbor test", so a new shape only needs an `inside()` function. `tests/domain/fill-efficiency.test.ts` sets an upper bound on fill commands per block for every shape.
 
-For very large terrain work, compute the coordinates yourself and send many `/fill` commands with `mc_run_commands` (200 per call), or write a `.mcfunction` file and run it with `/function`. See [agents/docs/large-builds.md](agents/docs/large-builds.md) for the limits involved.
+For very large terrain work, compute the coordinates yourself and send many `/fill` commands with `mc_run_commands` (200 per call), or write a `.mcfunction` file and run it with `/function`. See [agents/docs/large-builds.md](https://github.com/gjlmotea/blockhand-mcp/blob/main/agents/docs/large-builds.md) for the limits involved.
 
 ## Reading blocks
 
@@ -257,7 +282,7 @@ Reading a whole region block by block would need a behavior pack and the Script 
 
 ## Undo (off by default)
 
-> Automatic undo is **off by default**. On Minecraft Education 1.26.32 (macOS), the native region check that undo sends before the first small build (`body.version=25`) never got a reply; after that, every command on the connection timed out, including what the player typed in chat, and only restarting Minecraft recovered. This was reproduced three times. Turn it on with `MINECRAFT_EDU_UNDO_ENABLED=1` or `mc_undo_control` with `configure enabled=true` only if you accept that risk. Design notes: [agents/docs/undo/region-undo.md](agents/docs/undo/region-undo.md).
+> Automatic undo is **off by default**. On Minecraft Education 1.26.32 (macOS), the native region check that undo sends before the first small build (`body.version=25`) never got a reply; after that, every command on the connection timed out, including what the player typed in chat, and only restarting Minecraft recovered. This was reproduced three times. Turn it on with `MINECRAFT_EDU_UNDO_ENABLED=1` or `mc_undo_control` with `configure enabled=true` only if you accept that risk. Design notes: [agents/docs/undo/region-undo.md](https://github.com/gjlmotea/blockhand-mcp/blob/main/agents/docs/undo/region-undo.md).
 
 When enabled, undo keeps one operation of up to 4,096 blocks, snapshotted in game memory with `structure save ... memory` (nothing is written to disk). There is no redo. It covers the overworld, absolute integer coordinates and basic static building blocks; unsupported builds are rejected before anything is changed.
 
@@ -267,14 +292,16 @@ Everything has a default; no `.env` file is needed.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `MINECRAFT_EDU_WS_HOST` | `127.0.0.1` | Listen address; loopback only by default |
+| `MINECRAFT_EDU_WS_HOST` | `127.0.0.1` | Listen address of the game WebSocket; loopback only by default (see [Safety](#safety)). The hub's control port always listens on `127.0.0.1` |
 | `MINECRAFT_EDU_WS_PORT` | `19131` | Port the game connects to. The default uses the shared hub; any other value (such as `0`) runs an isolated standalone bridge |
 | `MINECRAFT_EDU_HUB` | auto | `0` disables the hub (one bridge per session); `1` forces the hub on a custom port |
 | `MINECRAFT_EDU_HUB_PORT` | `19132` | Local control port the sessions use to reach the hub; also the lock that decides which process is the hub |
-| `MINECRAFT_EDU_HUB_DIR` | `~/.blockhand` | Hub state file `hub.json` (with an access key readable only by the local user) and the log `hub.log` |
+| `MINECRAFT_EDU_HUB_DIR` | `~/.blockhand` | Folder for the hub's state file `hub.json` (holds the hub's access token) and its log `hub.log`; see [Safety](#safety) |
 | `MINECRAFT_EDU_HUB_IDLE_MS` | `600000` | The hub exits after this long with no session check-ins and no game connection |
+| `MINECRAFT_EDU_HUB_ATTACH_MS` | `8000` | How long a session waits for a hub it has just started to answer (500–60,000 ms); if the hub does not answer in time, the session runs a standalone bridge on a random port |
 | `MINECRAFT_EDU_CONNECT_NOTICE` | on | Show the green "✔ BlockHand connected" line in chat, in the game language (detected with one read-only `time query daytime` first); `0` turns it off |
 | `MINECRAFT_EDU_WS_PORT_FALLBACK` | `1` | Pick a free port when the preferred one is taken; `0` fails instead |
+| `MINECRAFT_EDU_ENCRYPTION` | on | When the game connects, try the WebSocket encryption handshake; if it is not negotiated, the connection continues in plaintext. `0` skips the handshake |
 | `MINECRAFT_EDU_COMMAND_TIMEOUT_MS` | `10000` | How long to wait for the game to answer one command |
 | `MINECRAFT_EDU_KEEPALIVE_INTERVAL_MS` | `30000` | Interval of the idle keepalive probe (`time query daytime`); three unanswered probes in a row close the connection |
 | `MINECRAFT_EDU_EVENT_BUFFER` | `500` | Event ring buffer size |
@@ -286,9 +313,12 @@ Everything has a default; no `.env` file is needed.
 
 ## Safety
 
-- The WebSocket listens on `127.0.0.1` only. Nothing connects to the internet.
-- The MCP runtime does not write files on the host. The one exception is `mc_structure` with `saveMode: "disk"`, which makes the game write a structure into its world folder; the tool reply says where.
-- No secrets, tokens or accounts are involved.
+- By default the game WebSocket listens on `127.0.0.1` only. `MINECRAFT_EDU_WS_HOST` changes that address. The game port does not authenticate connections, and a new connection replaces the current one, so any other address lets every machine that can reach it connect in place of the game. The hub's control port (`MINECRAFT_EDU_HUB_PORT`, `19132` by default) always listens on `127.0.0.1`. BlockHand itself makes no connections to the internet.
+- The shared hub keeps two files in `~/.blockhand` (or `MINECRAFT_EDU_HUB_DIR`). When the hub is off (`MINECRAFT_EDU_HUB=0`, or a custom `MINECRAFT_EDU_WS_PORT` without `MINECRAFT_EDU_HUB=1`), neither file is written.
+  - `hub.json` holds the hub's process ID, ports, build ID, start time and a random access token. The hub creates a new token each time it starts and removes the file when it shuts down. Every request to the control port must present the token as a bearer token; sessions read it from this file to reach the hub. The folder is created with mode `0700` and the file with mode `0600`. Node.js cannot set owner/group/other permissions on Windows, so these modes only take effect on macOS and Linux.
+  - `hub.log` is the hub's timestamped log. When a new hub starts and the log is larger than 1 MiB, it is renamed to `hub.log.1`. With `MINECRAFT_EDU_DEBUG_FRAMES=1`, every raw frame from the game is logged there too.
+- Apart from those files, the server writes nothing on the host. `mc_structure` with `saveMode: "disk"` makes the game write a structure into its world folder; the tool reply says where.
+- No accounts or credentials for any online service are involved; the hub token only guards the local control port.
 - `mc_run_command` accepts slash commands, which only act inside the local game world. Its gate is structural rather than a keyword blocklist:
   1. One line only. Newlines and NUL are rejected, so one request cannot become two commands.
   2. Commands that would cut or redirect the bridge are refused: `wsserver`, `connect` and `closewebsocket`, including when wrapped in `execute`.
@@ -353,6 +383,6 @@ The domain layer knows nothing about WebSockets, so the whole MCP tool pipeline 
 
 ## License and trademarks
 
-[MIT](LICENSE).
+[MIT](https://github.com/gjlmotea/blockhand-mcp/blob/main/LICENSE).
 
 NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT. Minecraft and Minecraft Education are trademarks of Mojang Studios and Microsoft. BlockHand is an independent open-source project.
