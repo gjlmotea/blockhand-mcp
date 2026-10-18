@@ -52,7 +52,7 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
     {
       title: 'Fill a box',
       description:
-        'Fill the box from from to to with one kind of block. Bedrock allows at most 32768 blocks per fill; beyond that use mc_build_shape, which splits the work into batches automatically. mode=hollow keeps only the shell, outline keeps only the edges.',
+        'Fill the box from from to to with one kind of block. Bedrock allows at most 32768 blocks per fill; beyond that use mc_build_shape, which splits the work into batches automatically. mode=hollow fills the six outer faces and clears the inside to air; mode=outline replaces only the six outer faces and leaves the inside as it is.',
       inputSchema: z
         .object({
           from: coordinateSchema(),

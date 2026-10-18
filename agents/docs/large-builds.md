@@ -269,7 +269,7 @@ fill x1 y1 z1 x2 y2 z2 stone_bricks 0 hollow
 
 不寫 tileData 的話，`fill … wheat` 會鋪出一整片剛播種的綠芽，遠看是禿的。**農田要有金黃的收穫感，就一定要 `7`。**
 
-`0 outline` 也很好用：`fill x1 y1 z1 x2 y2 z2 <block> 0 outline` 只畫十二條稜邊，拿來給倉庫／穀倉鑲一圈腰帶只要一條指令。
+`0 outline` 也很好用：`fill x1 y1 z1 x2 y2 z2 <block> 0 outline` 只取代外殼的六個面，內部維持原狀（`hollow` 則會把內部清成空氣）。範圍只有一格高時，外殼就是一圈外框，拿來給倉庫／穀倉鑲一圈腰帶只要一條指令。
 
 ## 量產：structure save / load 一次呼叫種 150 棟
 

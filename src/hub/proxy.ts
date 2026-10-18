@@ -4,10 +4,10 @@ import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { isInitializeRequest, type JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 
 import { log } from '../logger.js';
+import { createStdioTransport } from '../transports/stdio.js';
 import {
   buildId,
   fetchHealth,
@@ -100,7 +100,7 @@ export async function runProxy(settings: HubSettings, version: string, wsPort: n
   const first = await ensureHub(settings, version, wsPort);
   if (first === null) return 'unavailable';
 
-  const stdio = new StdioServerTransport();
+  const stdio = createStdioTransport();
   let initialize: (JSONRPCMessage & { readonly id: string | number }) | null = null;
   let initialized: JSONRPCMessage | null = null;
   let reattaching: Promise<boolean> | null = null;
