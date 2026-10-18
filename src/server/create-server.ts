@@ -8,6 +8,15 @@ import { registerTools } from './register-tools.js';
 
 export const SERVER_NAME = 'minecraft-edu-mcp';
 
+/**
+ * 單次 tools/call 引數的元素上限（陣列元素加物件成員），SDK 在 zod 驗證之前先數。
+ *
+ * 最大的合法輸入是 20,000 格的藍圖：每格是 1 個陣列元素，加上 position、block、
+ * blockStates 與 x、y、z 共 7 個，總計約 14 萬。超過這個量級的引數不可能通過
+ * schema，提早拒絕就不必把整份走過 zod。
+ */
+export const MAX_TOOL_INPUT_ELEMENTS = 150_000;
+
 export type WriteGuard = (tool: string, work: () => Promise<unknown>) => Promise<unknown>;
 
 export function createMcpServer(options: {
@@ -20,6 +29,7 @@ export function createMcpServer(options: {
   const server = new McpServer(
     { name: SERVER_NAME, version: options.version },
     {
+      maxToolInputElements: MAX_TOOL_INPUT_ELEMENTS,
       instructions: [
         'This server drives Minecraft Education through its documented /wsserver (/connect) command. The message protocol used after the connection is made has no public stability guarantee.',
         'The game is the side that connects. When any tool reports not-connected, call mc_status to get connectCommand, ask the user to type it in the game chat, then wait with mc_await_connection.',

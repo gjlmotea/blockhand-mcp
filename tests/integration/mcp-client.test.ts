@@ -449,3 +449,34 @@ describe('mc_structure 儲存語意', () => {
     expect(structured(status)['savedStructures']).toEqual([]);
   });
 });
+
+describe('tools/call 引數的元素上限', () => {
+  const entry = (i: number) => ({
+    position: { x: i, y: 64, z: 0 },
+    block: 'stone',
+    blockStates: '["stone_type":"granite"]',
+  });
+
+  it('最大的合法藍圖（20,000 格、每格欄位全滿）仍在上限內', async () => {
+    const client = await connect(createFakeConnection());
+    const result = await client.callTool({
+      name: 'mc_blueprint_preview',
+      arguments: { entries: Array.from({ length: 20_000 }, (_, i) => entry(i)) },
+    });
+    expect(result.isError).not.toBe(true);
+  });
+
+  it('元素數超過上限的引數在 schema 驗證之前就被拒絕', async () => {
+    const client = await connect(createFakeConnection());
+    const outcome = await client
+      .callTool({
+        name: 'mc_blueprint_preview',
+        arguments: { entries: Array.from({ length: 30_000 }, (_, i) => entry(i)) },
+      })
+      .then(
+        (result) => JSON.stringify(result.content),
+        (error: unknown) => String(error),
+      );
+    expect(outcome).toContain('maximum of 150000 elements');
+  });
+});

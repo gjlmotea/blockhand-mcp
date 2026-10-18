@@ -22,6 +22,11 @@ import {
 } from './settings.js';
 import { WriteLock } from './write-lock.js';
 
+/**
+ * 最大的合法請求是 20,000 格的藍圖：每格欄位都填到 schema 上限時約 7.4 MiB，
+ * blockStates 全是需要跳脫的字元時約 11.2 MiB。32 MiB 留了餘裕。
+ * token 在讀 body 之前就驗；body 也由這裡讀完再交給 SDK，所以 SDK 自己讀 body 的路徑不會經過。
+ */
 const MAX_BODY_BYTES = 32 * 1024 * 1024;
 const STALE_SESSION_MS = 30 * 60_000;
 // Subscriptions change what the bridge buffers, not the world.
