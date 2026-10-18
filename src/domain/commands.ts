@@ -28,7 +28,7 @@ export function assertIdentifier(value: string, label: string): string {
   if (!IDENTIFIER_PATTERN.test(value)) {
     throw new MinecraftBridgeError(
       'invalid-identifier',
-      `${label} 只接受字母、數字、底線、點、冒號與連字號，實際收到：${JSON.stringify(value)}`,
+      `Invalid ${label}: only letters, digits, underscores, dots, colons and hyphens are allowed; got ${JSON.stringify(value)}`,
     );
   }
   return value;
@@ -38,7 +38,7 @@ export function assertBlockStates(value: string): string {
   if (!BLOCK_STATES_PATTERN.test(value)) {
     throw new MinecraftBridgeError(
       'invalid-block-states',
-      `方塊狀態必須是單一組 [] 且不得含換行，實際收到：${JSON.stringify(value)}`,
+      `Block states must be a single [] group without newlines; got ${JSON.stringify(value)}`,
     );
   }
   return value;
@@ -48,7 +48,7 @@ export function assertSelector(value: string, label: string): string {
   if (!SELECTOR_PATTERN.test(value)) {
     throw new MinecraftBridgeError(
       'invalid-selector',
-      `${label} 必須是 @a/@e/@p/@r/@s 選擇器或單純玩家名，實際收到：${JSON.stringify(value)}`,
+      `Invalid ${label}: it must be an @a/@e/@p/@r/@s selector or a plain player name; got ${JSON.stringify(value)}`,
     );
   }
   return value;
@@ -56,12 +56,12 @@ export function assertSelector(value: string, label: string): string {
 
 export function assertFreeText(value: string, label: string, maxLength = 512): string {
   if (TEXT_FORBIDDEN.test(value)) {
-    throw new MinecraftBridgeError('invalid-text', `${label} 不得包含換行。`);
+    throw new MinecraftBridgeError('invalid-text', `The ${label} must not contain newlines.`);
   }
   if (value.length > maxLength) {
     throw new MinecraftBridgeError(
       'invalid-text',
-      `${label} 長度 ${String(value.length)} 超過上限 ${String(maxLength)}。`,
+      `The ${label} is ${String(value.length)} characters long, over the limit of ${String(maxLength)}.`,
     );
   }
   return value;
@@ -72,7 +72,7 @@ function join(parts: readonly (string | null)[]): string {
 }
 
 function blockToken(block: string, states: string | null): readonly (string | null)[] {
-  return [assertIdentifier(block, '方塊 ID'), states === null ? null : assertBlockStates(states)];
+  return [assertIdentifier(block, 'block ID'), states === null ? null : assertBlockStates(states)];
 }
 
 /* ────────────────────────── Agent（手腳） ────────────────────────── */
@@ -103,7 +103,7 @@ export const agentCommands = {
     return `agent place ${String(assertSlot(slot))} ${direction}`;
   },
   collect(item: string): string {
-    return `agent collect ${assertIdentifier(item, '收集目標')}`;
+    return `agent collect ${assertIdentifier(item, 'collect item')}`;
   },
   collectAll(): string {
     return 'agent collect all';
@@ -144,7 +144,7 @@ function assertSlot(slot: number): number {
   if (!Number.isInteger(slot) || slot < 1 || slot > 27) {
     throw new MinecraftBridgeError(
       'invalid-slot',
-      `Agent 背包槽位必須是 1～27 的整數，實際收到：${String(slot)}`,
+      `An Agent inventory slot must be an integer from 1 to 27; got ${String(slot)}`,
     );
   }
   return slot;
@@ -154,7 +154,7 @@ function assertQuantity(quantity: number): number {
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 64) {
     throw new MinecraftBridgeError(
       'invalid-quantity',
-      `數量必須是 1～64 的整數，實際收到：${String(quantity)}`,
+      `Quantity must be an integer from 1 to 64; got ${String(quantity)}`,
     );
   }
   return quantity;
@@ -189,7 +189,7 @@ export const worldCommands = {
     if (replaceBlock !== null && mode !== 'replace') {
       throw new MinecraftBridgeError(
         'invalid-fill',
-        'replaceBlock 只能搭配 mode="replace" 使用。',
+        'replaceBlock can only be used with mode="replace".',
       );
     }
     return join([
@@ -241,20 +241,20 @@ export const worldCommands = {
   },
 
   queryTarget(selector: string): string {
-    return `querytarget ${assertSelector(selector, '查詢目標')}`;
+    return `querytarget ${assertSelector(selector, 'query target')}`;
   },
 
   summon(entity: string, position: Coordinate | null, nameTag: string | null): string {
     return join([
       'summon',
-      assertIdentifier(entity, '生物 ID'),
+      assertIdentifier(entity, 'entity ID'),
       position === null ? null : formatCoordinate(position),
-      nameTag === null ? null : `"${assertFreeText(nameTag, '名牌', 64).replace(/"/g, '')}"`,
+      nameTag === null ? null : `"${assertFreeText(nameTag, 'name tag', 64).replace(/"/g, '')}"`,
     ]);
   },
 
   setTime(value: string): string {
-    return `time set ${assertIdentifier(value, '時間')}`;
+    return `time set ${assertIdentifier(value, 'time')}`;
   },
 
   setWeather(condition: 'clear' | 'rain' | 'thunder', durationSeconds: number | null): string {
@@ -262,7 +262,7 @@ export const worldCommands = {
   },
 
   setGameRule(rule: string, value: string): string {
-    return `gamerule ${assertIdentifier(rule, '遊戲規則')} ${assertIdentifier(value, '規則值')}`;
+    return `gamerule ${assertIdentifier(rule, 'game rule')} ${assertIdentifier(value, 'rule value')}`;
   },
 
   setDifficulty(level: 'peaceful' | 'easy' | 'normal' | 'hard'): string {
@@ -278,7 +278,7 @@ export const worldCommands = {
   ): string {
     return join([
       'structure save',
-      assertIdentifier(name, '結構名稱'),
+      assertIdentifier(name, 'structure name'),
       formatCoordinate(from),
       formatCoordinate(to),
       includeEntities ? 'true' : 'false',
@@ -293,7 +293,7 @@ export const worldCommands = {
   loadStructure(name: string, to: Coordinate, mirror: StructureMirror = 'none'): string {
     return join([
       'structure load',
-      assertIdentifier(name, '結構名稱'),
+      assertIdentifier(name, 'structure name'),
       formatCoordinate(to),
       mirror === 'none' ? null : '0_degrees',
       mirror === 'none' ? null : mirror,
@@ -301,7 +301,7 @@ export const worldCommands = {
   },
 
   deleteStructure(name: string): string {
-    return join(['structure delete', assertIdentifier(name, '結構名稱')]);
+    return join(['structure delete', assertIdentifier(name, 'structure name')]);
   },
 
   addTickingArea(from: Coordinate, to: Coordinate, name: string | null): string {
@@ -309,7 +309,7 @@ export const worldCommands = {
       'tickingarea add',
       formatCoordinate(from),
       formatCoordinate(to),
-      name === null ? null : assertIdentifier(name, '常載區名稱'),
+      name === null ? null : assertIdentifier(name, 'ticking area name'),
     ]);
   },
 } as const;
@@ -318,13 +318,13 @@ export const worldCommands = {
 
 export const playerCommands = {
   teleport(target: string, destination: Coordinate): string {
-    return `teleport ${assertSelector(target, '傳送對象')} ${formatCoordinate(destination)}`;
+    return `teleport ${assertSelector(target, 'teleport target')} ${formatCoordinate(destination)}`;
   },
   give(target: string, item: string, amount: number, data: number | null): string {
     return join([
       'give',
-      assertSelector(target, '給予對象'),
-      assertIdentifier(item, '物品 ID'),
+      assertSelector(target, 'give target'),
+      assertIdentifier(item, 'item ID'),
       String(amount),
       data === null ? null : String(data),
     ]);
@@ -332,12 +332,12 @@ export const playerCommands = {
   clear(target: string, item: string | null): string {
     return join([
       'clear',
-      assertSelector(target, '清空對象'),
-      item === null ? null : assertIdentifier(item, '物品 ID'),
+      assertSelector(target, 'clear target'),
+      item === null ? null : assertIdentifier(item, 'item ID'),
     ]);
   },
   gameMode(target: string, mode: 'survival' | 'creative' | 'adventure' | 'spectator'): string {
-    return `gamemode ${mode} ${assertSelector(target, '對象')}`;
+    return `gamemode ${mode} ${assertSelector(target, 'target')}`;
   },
   effect(
     target: string,
@@ -348,25 +348,25 @@ export const playerCommands = {
   ): string {
     return join([
       'effect',
-      assertSelector(target, '對象'),
-      assertIdentifier(effect, '效果 ID'),
+      assertSelector(target, 'target'),
+      assertIdentifier(effect, 'effect ID'),
       String(seconds),
       String(amplifier),
       hideParticles ? 'true' : 'false',
     ]);
   },
   clearEffects(target: string): string {
-    return `effect ${assertSelector(target, '對象')} clear`;
+    return `effect ${assertSelector(target, 'target')} clear`;
   },
   experience(target: string, amount: number, unit: 'levels' | 'points'): string {
     const suffix = unit === 'levels' ? 'L' : '';
-    return `xp ${String(amount)}${suffix} ${assertSelector(target, '對象')}`;
+    return `xp ${String(amount)}${suffix} ${assertSelector(target, 'target')}`;
   },
   kill(target: string): string {
-    return `kill ${assertSelector(target, '對象')}`;
+    return `kill ${assertSelector(target, 'target')}`;
   },
   ability(target: string, ability: 'worldbuilder' | 'mayfly' | 'mute', enabled: boolean): string {
-    return `ability ${assertSelector(target, '對象')} ${ability} ${enabled ? 'true' : 'false'}`;
+    return `ability ${assertSelector(target, 'target')} ${ability} ${enabled ? 'true' : 'false'}`;
   },
 } as const;
 
@@ -374,30 +374,30 @@ export const playerCommands = {
 
 export const chatCommands = {
   say(message: string): string {
-    return `say ${assertFreeText(message, '訊息')}`;
+    return `say ${assertFreeText(message, 'message')}`;
   },
   tell(target: string, message: string): string {
-    return `tell ${assertSelector(target, '對象')} ${assertFreeText(message, '訊息')}`;
+    return `tell ${assertSelector(target, 'target')} ${assertFreeText(message, 'message')}`;
   },
   title(
     target: string,
     slot: 'title' | 'subtitle' | 'actionbar',
     message: string,
   ): string {
-    return `title ${assertSelector(target, '對象')} ${slot} ${assertFreeText(message, '訊息', 256)}`;
+    return `title ${assertSelector(target, 'target')} ${slot} ${assertFreeText(message, 'message', 256)}`;
   },
   clearTitle(target: string): string {
-    return `title ${assertSelector(target, '對象')} clear`;
+    return `title ${assertSelector(target, 'target')} clear`;
   },
   playSound(sound: string, target: string, position: Coordinate | null): string {
     return join([
       'playsound',
-      assertIdentifier(sound, '音效 ID'),
-      assertSelector(target, '對象'),
+      assertIdentifier(sound, 'sound ID'),
+      assertSelector(target, 'target'),
       position === null ? null : formatCoordinate(position),
     ]);
   },
   particle(effect: string, position: Coordinate): string {
-    return `particle ${assertIdentifier(effect, '粒子 ID')} ${formatCoordinate(position)}`;
+    return `particle ${assertIdentifier(effect, 'particle ID')} ${formatCoordinate(position)}`;
   },
 } as const;

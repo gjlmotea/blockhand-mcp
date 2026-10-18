@@ -14,7 +14,7 @@ import {
 import { batchToPayload, guard, ok, summarizeBatch } from '../tool-kit.js';
 
 const BUILD_NOTE =
-  '座標一律是絕對世界座標；不知道玩家在哪就先用 mc_query_target。建造會直接改變世界，動手前建議先用對應的 preview 工具看方塊數與邊界盒。';
+  'All coordinates are absolute world coordinates; if you do not know where the player is, call mc_query_target first. Building changes the world directly, so check the block count and bounding box with the matching preview tool before you build.';
 
 /**
  * 形狀選型指引。
@@ -25,31 +25,31 @@ const BUILD_NOTE =
  */
 const SHAPE_GUIDE = [
   '',
-  '【依意圖選形狀】',
-  '基本量體：box 方體、sphere 球、ellipsoid 橢球、cylinder 圓柱、cone 圓錐（topRadius>0 就是圓錐台）、pyramid 金字塔（sides 可調邊數、topRadius>0 就是角錐台）、prism 正 n 角柱。',
-  '線與面：line 直線、curve 平滑曲線、disk 圓盤／圓環、tube 任意方向的圓柱。',
-  '建築件：wedge 單斜面、roof 屋頂（gable 人字／hip 四坡）、arch 拱、stairs 直階梯、spiralStairs 螺旋梯、polywall 折線牆／城牆。',
-  '地景與路徑：heightfield 起伏地表、ribbon 道路／橋面。',
-  '裝飾與造型：torus 環、helix 螺旋線、cross 十字柱、star 星形柱、revolution 旋轉體。',
+  '[Choose a shape by intent]',
+  'Basic volumes: box, sphere, ellipsoid, cylinder, cone (topRadius>0 makes a truncated cone), pyramid (sides sets the number of sides, topRadius>0 makes a frustum), prism (regular n-sided prism).',
+  'Lines and surfaces: line (straight line), curve (smooth curve), disk (disk / ring), tube (cylinder in any direction).',
+  'Building parts: wedge (single slope), roof (gable / hip), arch, stairs (straight stairs), spiralStairs, polywall (polyline wall / city wall).',
+  'Terrain and paths: heightfield (rolling ground), ribbon (road / bridge deck).',
+  'Decoration and forms: torus (ring), helix, cross (plus-shaped column), star (star-shaped column), revolution (solid of revolution).',
   '',
-  '【容易選錯的幾組，先看這裡】',
-  '要斜的柱子、樑、管線 → tube，不是 cylinder（cylinder 只能對齊 x／y／z）。',
-  '要直角轉折的牆或圍牆 → polywall，不是 curve（curve 是平滑曲線，會把直角磨圓）。',
-  '要有屋脊的屋頂 → roof；只要一面斜坡或坡道 → wedge。',
-  '要繞塔而上的樓梯 → spiralStairs；直上直下 → stairs。',
-  '要上下不等寬的塔身、基座、煙囪 → cone 或 pyramid 加 topRadius，不要用多層 box 疊。',
-  '要圓頂、花瓶、拋物面、冷卻塔這類「圓的但粗細會變」→ revolution 換一組 profile，不需要別的形狀。',
-  '要一片起伏的地 → heightfield；要一條有寬度的平路 → ribbon。',
+  '[Easy to confuse; read this first]',
+  'Slanted columns, beams, pipes -> tube, not cylinder (cylinder only aligns with x / y / z).',
+  'Walls or fences with right-angle turns -> polywall, not curve (curve is smooth and rounds off right angles).',
+  'A roof with a ridge -> roof; a single slope or ramp only -> wedge.',
+  'Stairs that wind around a tower -> spiralStairs; straight up and down -> stairs.',
+  'Tower bodies, bases or chimneys that are wider at one end -> cone or pyramid with topRadius, not stacked layers of box.',
+  'Domes, vases, paraboloids, cooling towers and other round forms whose width changes -> revolution with a different profile; no other shape is needed.',
+  'A stretch of rolling ground -> heightfield; a flat road with a width -> ribbon.',
   '',
-  '不確定就先用 mc_build_preview 看方塊數與邊界盒，它不會動到世界。',
+  'If unsure, check the block count and bounding box with mc_build_preview first; it does not touch the world.',
 ].join('\n');
 
 export function registerBuildTools(server: McpServer, build: BuildService): void {
   server.registerTool(
     'mc_build_preview',
     {
-      title: '預覽幾何建造',
-      description: `只計算不動工：回報這個形狀會用掉幾個方塊、邊界盒在哪、會拆成幾條 fill 指令。${BUILD_NOTE}`,
+      title: 'Preview a shape build',
+      description: `Compute only, build nothing: report how many blocks the shape uses, where its bounding box is, and how many fill commands it splits into. ${BUILD_NOTE}`,
       inputSchema: z
         .object({
           shape: shapeSchema(),
@@ -65,7 +65,7 @@ export function registerBuildTools(server: McpServer, build: BuildService): void
         const plan = build.previewShape(shape as ShapeSpec, block, blockStates);
         return ok(
           { ...plan },
-          `${plan.shape}：${String(plan.blockCount)} 個方塊，拆成 ${String(plan.fillBatches)} 條 fill（比逐格放置少送 ${String(plan.savedCommands)} 次），範圍 (${String(plan.bounds.min.x)}, ${String(plan.bounds.min.y)}, ${String(plan.bounds.min.z)}) 到 (${String(plan.bounds.max.x)}, ${String(plan.bounds.max.y)}, ${String(plan.bounds.max.z)})。`,
+          `${plan.shape}: ${String(plan.blockCount)} blocks in ${String(plan.fillBatches)} fill commands (${String(plan.savedCommands)} fewer than placing block by block), from (${String(plan.bounds.min.x)}, ${String(plan.bounds.min.y)}, ${String(plan.bounds.min.z)}) to (${String(plan.bounds.max.x)}, ${String(plan.bounds.max.y)}, ${String(plan.bounds.max.z)}).`,
         );
       }),
   );
@@ -73,9 +73,9 @@ export function registerBuildTools(server: McpServer, build: BuildService): void
   server.registerTool(
     'mc_build_shape',
     {
-      title: '建造幾何形狀',
+      title: 'Build a shape',
       description:
-        `直接在世界蓋出形狀。方塊座標會自動合併成最少的 fill 指令，所以蓋一顆半徑 20 的球只要幾百條指令而不是三萬條。${SHAPE_GUIDE}${BUILD_NOTE}`,
+        `Build a shape directly in the world. Block coordinates are merged into the fewest fill commands automatically, so a sphere of radius 20 takes a few hundred commands instead of thirty thousand.${SHAPE_GUIDE}\n\n${BUILD_NOTE}`,
       inputSchema: z
         .object({
           shape: shapeSchema(),
@@ -93,7 +93,7 @@ export function registerBuildTools(server: McpServer, build: BuildService): void
           { ...batchToPayload(execution.batch), plan: { ...execution.plan } },
           summarizeBatch(
             execution.batch,
-            `建造 ${execution.plan.shape}（${String(execution.plan.blockCount)} 方塊 / ${String(execution.plan.fillBatches)} 批）`,
+            `Build ${execution.plan.shape} (${String(execution.plan.blockCount)} blocks / ${String(execution.plan.fillBatches)} batches)`,
           ),
         );
       }),
@@ -110,9 +110,9 @@ export function registerBuildTools(server: McpServer, build: BuildService): void
   server.registerTool(
     'mc_blueprint_preview',
     {
-      title: '預覽藍圖建造',
+      title: 'Preview a blueprint build',
       description:
-        '只計算不動工：把一份逐格藍圖依方塊種類分組，回報總方塊數與合併後的 fill 批次數。',
+        'Compute only, build nothing: group a block-by-block blueprint by block type and report the total block count and the number of merged fill batches.',
       inputSchema: z
         .object({ entries: z.array(blueprintEntrySchema).min(1).max(20_000) })
         .strict(),
@@ -124,7 +124,7 @@ export function registerBuildTools(server: McpServer, build: BuildService): void
         const plan = build.previewBlueprint(entries);
         return ok(
           { ...plan },
-          `藍圖：${String(plan.blockCount)} 個方塊，合併成 ${String(plan.fillBatches)} 條指令。`,
+          `Blueprint: ${String(plan.blockCount)} blocks merged into ${String(plan.fillBatches)} commands.`,
         );
       }),
   );
@@ -132,10 +132,10 @@ export function registerBuildTools(server: McpServer, build: BuildService): void
   server.registerTool(
     'mc_build_blueprint',
     {
-      title: '建造逐格藍圖',
+      title: 'Build a block-by-block blueprint',
       description:
-        '蓋出任意形狀：直接給一份「座標 → 方塊」清單，相同方塊會自動合併成最少的 fill。' +
-        '幾何形狀請優先用 mc_build_shape；這個工具是給像素畫、文字、不規則造型或從外部資料轉來的模型用的。',
+        'Build any form from a list of coordinate -> block entries; identical blocks are merged into the fewest fill commands automatically. ' +
+        'Prefer mc_build_shape for geometric shapes; this tool is for pixel art, text, irregular forms, or models converted from external data.',
       inputSchema: z
         .object({ entries: z.array(blueprintEntrySchema).min(1).max(20_000) })
         .strict(),
@@ -149,7 +149,7 @@ export function registerBuildTools(server: McpServer, build: BuildService): void
           { ...batchToPayload(execution.batch), plan: { ...execution.plan } },
           summarizeBatch(
             execution.batch,
-            `建造藍圖（${String(execution.plan.blockCount)} 方塊 / ${String(execution.plan.fillBatches)} 批）`,
+            `Build blueprint (${String(execution.plan.blockCount)} blocks / ${String(execution.plan.fillBatches)} batches)`,
           ),
         );
       }),

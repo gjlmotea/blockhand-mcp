@@ -100,7 +100,7 @@ function limitDimensions(r: UndoRegion): UndoRegion[] {
 }
 
 function unsupported(message: string): never {
-  throw new MinecraftBridgeError('undo-unsupported', `${message} 自動 Undo 只支援小範圍、絕對座標的基本建材；需要原有完整功能時，可用 mc_undo_control 停用自動備份。`);
+  throw new MinecraftBridgeError('undo-unsupported', `${message} Automatic Undo supports only small areas of basic building blocks at absolute coordinates; to get the full original behavior back, turn off automatic backup with mc_undo_control.`);
 }
 
 /** No reads or writes: reject resource/semantic limits before retiring the previous undo. */
@@ -108,7 +108,7 @@ export function planUndo(commands: readonly string[], maxBlocks: number): UndoPl
   const assessed = commands.map(assessRawCommand);
   if (!assessed.some(c => c.verb === 'fill' || c.verb === 'setblock')) return null;
   if (assessed.some(c => !['fill', 'setblock'].includes(c.verb))) {
-    unsupported('可復原的建造批次不能混入其他指令。');
+    unsupported('An undoable build batch cannot include other commands.');
   }
   let regions: UndoRegion[] = [];
   for (const command of assessed) {
@@ -116,28 +116,28 @@ export function planUndo(commands: readonly string[], maxBlocks: number): UndoPl
     const coordinateCount = command.verb === 'fill' ? 6 : 3;
     const numbers = tokens.slice(1, coordinateCount + 1);
     if (numbers.length !== coordinateCount || numbers.some(n => !/^-?\d+$/.test(n))) {
-      unsupported('自動 Undo 需要整數絕對座標。');
+      unsupported('Automatic Undo needs absolute integer coordinates.');
     }
     const p = numbers.map(Number);
     const from = { x: p[0]!, y: p[1]!, z: p[2]! };
     const to = coordinateCount === 6 ? { x: p[3]!, y: p[4]!, z: p[5]! } : from;
-    for (const v of [from, to]) assertPlaceableCoordinate({ ...v, mode: 'absolute' }, 'Undo 範圍');
+    for (const v of [from, to]) assertPlaceableCoordinate({ ...v, mode: 'absolute' }, 'the Undo region');
     const block = (tokens[coordinateCount + 1] ?? '').replace(/^minecraft:/, '');
     if (!STATIC_BLOCKS.has(block) && !COLORED_BLOCK.test(block)) {
-      unsupported(`「${block}」未列入可可靠檢查的基本建材；容器、生物、流體與動態機關不在第一版範圍。`);
+      unsupported(`"${block}" is not on the list of basic building blocks that can be checked reliably; containers, mobs, fluids and moving mechanisms are outside this first version.`);
     }
     const tail = tokens.slice(coordinateCount + 2);
     if (tail[0] === '[]') tail.shift();
     const mode = tail[0] ?? 'replace';
     if (tail.length > 1 || !['replace', 'hollow', 'outline'].includes(mode)
       || command.verb === 'setblock' && mode !== 'replace') {
-      unsupported('自動 Undo 不接受自訂 blockStates、keep、destroy 或條件 replace。');
+      unsupported('Automatic Undo does not accept custom blockStates, keep, destroy or conditional replace.');
     }
     const min = { x: Math.min(from.x,to.x), y: Math.min(from.y,to.y), z: Math.min(from.z,to.z) };
     const max = { x: Math.max(from.x,to.x), y: Math.max(from.y,to.y), z: Math.max(from.z,to.z) };
     const commandVolume = volume(min, max);
     if (commandVolume > maxBlocks) {
-      throw new MinecraftBridgeError('undo-too-large', `這條指令涵蓋 ${commandVolume} 格，超過自動 Undo 的 ${maxBlocks} 格預算；尚未施工。請縮小操作，或停用自動備份後使用既有建造流程。`);
+      throw new MinecraftBridgeError('undo-too-large', `This command covers ${commandVolume} blocks, over the automatic Undo budget of ${maxBlocks} blocks; nothing was built. Make the operation smaller, or turn off automatic backup and use the regular build flow.`);
     }
     const outer = region(min, max, block);
     let writes = [outer];
@@ -150,13 +150,13 @@ export function planUndo(commands: readonly string[], maxBlocks: number): UndoPl
       regions = regions.flatMap(previous => subtract(previous, write));
       regions.push(write);
     }
-    if (regions.length > MAX_PLANNING_REGIONS) throw new MinecraftBridgeError('undo-too-fragmented', '修改規劃太零散；尚未施工。');
+    if (regions.length > MAX_PLANNING_REGIONS) throw new MinecraftBridgeError('undo-too-fragmented', 'The planned changes are too fragmented; nothing was built.');
     regions = coalesce(regions);
-    if (regions.reduce((n,r) => n+r.blockCount,0) > maxBlocks) throw new MinecraftBridgeError('undo-too-large', `整個操作超過自動 Undo 的 ${maxBlocks} 格預算；尚未施工。`);
+    if (regions.reduce((n,r) => n+r.blockCount,0) > maxBlocks) throw new MinecraftBridgeError('undo-too-large', `The whole operation is over the automatic Undo budget of ${maxBlocks} blocks; nothing was built.`);
   }
   regions = regions.flatMap(limitDimensions);
   regions.sort((a,b) => a.from.y-b.from.y || a.from.z-b.from.z || a.from.x-b.from.x);
-  if (regions.length > MAX_UNDO_REGIONS) throw new MinecraftBridgeError('undo-too-fragmented', `修改範圍太零散，超過 ${MAX_UNDO_REGIONS} 個備份區；尚未施工。`);
+  if (regions.length > MAX_UNDO_REGIONS) throw new MinecraftBridgeError('undo-too-fragmented', `The changes are too fragmented, over ${MAX_UNDO_REGIONS} backup regions; nothing was built.`);
   return { blockCount: regions.reduce((n,r) => n+r.blockCount,0), regions };
 }
 
@@ -176,6 +176,6 @@ export function guardUndoRegion(region: UndoRegion, terminal: string): string {
     conditions.push(`if blocks ${position(from)} ${position(end)} ${position(destination)} all`);
   }
   const command = `execute in overworld ${conditions.join(' ')} run ${terminal}`;
-  if (command.length > 1024) throw new MinecraftBridgeError('undo-command-too-long', 'Undo 條件指令超過 1024 字元，未執行。');
+  if (command.length > 1024) throw new MinecraftBridgeError('undo-command-too-long', 'The Undo conditional command is over 1024 characters and was not run.');
   return command;
 }

@@ -104,7 +104,7 @@ export function expandAgentProgram(steps: readonly AgentProgramStep[]): string[]
         break;
       default: {
         const exhaustive: never = step;
-        throw new Error(`未知的 Agent 步驟：${JSON.stringify(exhaustive)}`);
+        throw new Error(`Unknown Agent step: ${JSON.stringify(exhaustive)}`);
       }
     }
   }

@@ -126,7 +126,7 @@ describe('ws adapter', () => {
     });
     const current = await harness.connection.runCommand('testforblock 0 20 0 air');
     expect(current.statusCode).toBe(-99);
-    expect((await previous).statusMessage).toContain('取代');
+    expect((await previous).statusMessage).toContain('replaced');
     harness.socket.terminate();
   });
 
@@ -169,7 +169,7 @@ describe('ws adapter', () => {
       body:{statusCode:0,statusMessage:'late first success'}})));
     const current=await harness.connection.runCommand('setblock 0 20 0 stone');
     expect(current.ok).toBe(false);
-    expect(current.statusMessage).toMatch(/等待遊戲回應超過/);
+    expect(current.statusMessage).toMatch(/No reply from the game within/);
   });
 
   /** 時間過去也不是證據：逾時很久之後才到的零 ID 回覆同樣不能歸屬。 */
@@ -183,7 +183,7 @@ describe('ws adapter', () => {
       body:{statusCode:0,statusMessage:'very late success'}})));
     const current=await harness.connection.runCommand('setblock 0 20 0 stone');
     expect(current.ok).toBe(false);
-    expect(current.statusMessage).toMatch(/等待遊戲回應超過/);
+    expect(current.statusMessage).toMatch(/No reply from the game within/);
   });
 
   /** 對得上 requestId 的回覆在逾時之後仍然正常運作，沒有被一起關掉。 */
@@ -247,7 +247,7 @@ describe('ws adapter', () => {
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
     expect(third).toMatchObject({ok:false,statusCode:null});
-    expect(third.statusMessage).toMatch(/沒有送出/);
+    expect(third.statusMessage).toMatch(/was not sent/);
     // 關鍵：跳過之後也不能在稍後偷偷送出去。
     await new Promise(resolve=>setTimeout(resolve,300));
     expect(sent).toEqual(['time query daytime','time query day']);
@@ -259,7 +259,7 @@ describe('ws adapter', () => {
     harness.respond(()=>{});
     const queued=Array.from({length:64},(_unused,index)=>
       harness.connection.runCommand(`testforblock 0 ${String(20+index)} 0 air`));
-    await expect(harness.connection.runCommand('say overflow')).rejects.toThrow(/上限/);
+    await expect(harness.connection.runCommand('say overflow')).rejects.toThrow(/limit/);
     harness.socket.terminate();
     const settled=await Promise.all(queued);
     expect(settled.every(outcome=>!outcome.ok)).toBe(true);
@@ -287,7 +287,7 @@ describe('ws adapter', () => {
     });
     const settled=await Promise.all(queued);
     expect(settled.every(outcome=>!outcome.ok)).toBe(true);
-    expect(settled.slice(1).every(outcome=>outcome.statusMessage?.includes('連線已改變'))).toBe(true);
+    expect(settled.slice(1).every(outcome=>outcome.statusMessage?.includes('connection changed'))).toBe(true);
     expect(receivedByReplacement).toEqual([]);
     expect(harness.connection.status().queuedCommands).toBe(0);
     harness.socket.terminate();
@@ -478,7 +478,7 @@ describe('ws adapter', () => {
     expect(outcome.ok).toBe(false);
     expect(outcome.statusMessage).toBe('Selector could not be resolved');
     // 關鍵：這是真正的失敗原因，不是「等待遊戲回應超過…」的逾時訊息。
-    expect(outcome.statusMessage).not.toMatch(/超過/);
+    expect(outcome.statusMessage).not.toMatch(/No reply from the game within/);
   });
 
   it('遊戲完全不回應時，逾時訊息說清楚是逾時', async () => {
@@ -489,7 +489,7 @@ describe('ws adapter', () => {
 
     const outcome = await harness.connection.runCommand('querytarget @s');
     expect(outcome.ok).toBe(false);
-    expect(outcome.statusMessage).toMatch(/等待遊戲回應超過/);
+    expect(outcome.statusMessage).toMatch(/No reply from the game within/);
   });
 
   it('把 querytarget 的殘餘欄位保留在 data', async () => {
@@ -729,7 +729,7 @@ describe('ws adapter', () => {
     expect(connection.status().connected).toBe(false);
   });
 
-  it('開啟 announceConnection 時，握手後在聊天列宣告已連上，且不算進玩家送出的指令數', async () => {
+  async function announcedNotice(daytimeReply: string): Promise<{ commands: string[]; text: string; port: number; issued: number }> {
     const connection = createWsMinecraftConnection({
       host: '127.0.0.1',
       port: 0,
@@ -745,6 +745,7 @@ describe('ws adapter', () => {
     const port = connection.status().port;
     const socket = new WebSocket(`ws://127.0.0.1:${String(port)}`);
     client = socket;
+    const commands: string[] = [];
     const notice = new Promise<string>((resolve) => {
       socket.on('message', (data: Buffer) => {
         const frame = JSON.parse(data.toString()) as {
@@ -752,23 +753,38 @@ describe('ws adapter', () => {
           body: { commandLine?: string };
         };
         if (frame.header.messagePurpose !== 'commandRequest') return;
+        const commandLine = frame.body.commandLine ?? '';
+        commands.push(commandLine);
         socket.send(JSON.stringify({
           header: { messagePurpose: 'commandResponse', requestId: frame.header.requestId },
-          body: { statusCode: 0 },
+          body: commandLine === 'time query daytime' ? { statusCode: 0, statusMessage: daytimeReply } : { statusCode: 0 },
         }));
-        resolve(frame.body.commandLine ?? '');
+        if (commandLine.startsWith('tellraw @a ')) resolve(commandLine);
       });
     });
     await connection.awaitConnection(2000);
     const commandLine = await notice;
-    expect(commandLine.startsWith('tellraw @a ')).toBe(true);
     const text = (JSON.parse(commandLine.slice('tellraw @a '.length)) as { rawtext: Array<{ text: string }> })
       .rawtext.map((part) => part.text).join('');
-    expect(text).toContain('已連上 Claude');
+    return { commands, text, port, issued: connection.status().commandsIssued };
+  }
+
+  it('開啟 announceConnection 時，先認出遊戲語言再用同一種語言宣告已連上，且不算進玩家送出的指令數', async () => {
+    const { commands, text, port, issued } = await announcedNotice('白天時間為 6000');
+    expect(commands).toEqual(['time query daytime', expect.stringMatching(/^tellraw @a /u)]);
+    expect(text).toContain('已連上 BlockHand');
     expect(text).toContain('/reload all、換世界通常也不會斷線');
     expect(text).toContain('不用再打 /connect');
     expect(text).toContain(`127.0.0.1:${String(port)}`);
-    expect(connection.status().commandsIssued).toBe(0);
+    expect(issued).toBe(0);
+  });
+
+  it('英文遊戲收到英文的連線通知', async () => {
+    const { text, port } = await announcedNotice('Daytime is 6000');
+    expect(text).toContain('BlockHand connected');
+    expect(text).toContain('No need to type /connect again');
+    expect(text).not.toMatch(/[\u4e00-\u9fff]/u);
+    expect(text).toContain(`127.0.0.1:${String(port)}`);
   });
 
   it('握手被拒時記一筆日誌並關掉 socket，不讓它掛著', async () => {

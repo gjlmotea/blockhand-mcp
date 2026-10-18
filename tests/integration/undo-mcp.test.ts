@@ -47,7 +47,7 @@ describe('automatic Undo through the MCP boundary', () => {
     const result = await client.callTool({ name: 'mc_status', arguments: {} });
     expect(result.isError).toBeFalsy();
     expect(result.structuredContent).toMatchObject({ connected: true, commandState: 'timed-out' });
-    expect(JSON.stringify(result.content)).toContain('最近指令未獲回覆');
+    expect(JSON.stringify(result.content)).toContain('a recent command got no reply');
   });
   it('groups a multi-material blueprint into one restorable operation', async () => {
     const result = await call('mc_build_blueprint', { entries: [

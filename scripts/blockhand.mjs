@@ -41,7 +41,7 @@ function clientCommand(client) {
   if (configured === undefined || configured === '') return client.binary;
   if (!isAbsolutePortablePath(configured) || !existsSync(configured)) {
     throw new Error(
-      `${client.pathEnvironmentVariable} 已設定但不是存在的絕對路徑：${configured}`,
+      `${client.pathEnvironmentVariable} is set but is not an existing absolute path: ${configured}`,
     );
   }
   return configured;
@@ -64,9 +64,9 @@ function run(command, args, options = {}) {
 }
 
 function summarizeCommandFailure(label, result) {
-  if (result.error !== null) return `${label} 無法執行：${result.error.message}`;
+  if (result.error !== null) return `${label} could not run: ${result.error.message}`;
   const detail = (result.stderr || result.stdout).trim().split(/\r?\n/u)[0];
-  return `${label} 失敗（exit ${String(result.status)}）${detail === '' ? '' : `：${detail}`}`;
+  return `${label} failed (exit ${String(result.status)})${detail === '' ? '' : `: ${detail}`}`;
 }
 
 function readViaCli(client) {
@@ -75,11 +75,11 @@ function readViaCli(client) {
   if (result.status !== 0) throw new Error(summarizeCommandFailure(label, result));
   try {
     const parsed = JSON.parse(result.stdout);
-    if (!Array.isArray(parsed)) throw new Error('輸出不是陣列');
+    if (!Array.isArray(parsed)) throw new Error('output is not an array');
     return parsed.find((server) => server?.name === MCP_NAME) ?? null;
   } catch (error) {
     throw new Error(
-      `${label} 回傳無法解析的資料：${error instanceof Error ? error.message : String(error)}`,
+      `${label} returned output that could not be parsed: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 }
@@ -96,7 +96,7 @@ function readViaConfigFile(client) {
     parsed = JSON.parse(readFileSync(path, 'utf8'));
   } catch (error) {
     throw new Error(
-      `${client.label} 設定檔無法解析：${path}（${error instanceof Error ? error.message : String(error)}）`,
+      `${client.label} config file could not be parsed: ${path} (${error instanceof Error ? error.message : String(error)})`,
     );
   }
   return client.read.extract(parsed, MCP_NAME);
@@ -121,21 +121,21 @@ function currentPaths() {
 function registeredNodeStatus(entry) {
   const command = entry?.transport?.command;
   if (typeof command !== 'string' || !isAbsolutePortablePath(command)) {
-    return { usable: false, detail: 'Node command 不是絕對路徑' };
+    return { usable: false, detail: 'Node command is not an absolute path' };
   }
-  if (!existsSync(command)) return { usable: false, detail: `Node 路徑不存在：${command}` };
+  if (!existsSync(command)) return { usable: false, detail: `Node path does not exist: ${command}` };
   const result = run(command, ['--version'], { timeout: 5000 });
   if (result.status !== 0) {
-    return { usable: false, detail: summarizeCommandFailure('登記的 Node --version', result) };
+    return { usable: false, detail: summarizeCommandFailure('registered Node --version', result) };
   }
   const version = result.stdout.trim();
   if (version !== `v${REQUIRED_NODE_VERSION}`) {
     return {
       usable: false,
-      detail: `登記的 Node 是 ${version || '未知版本'}，需要 v${REQUIRED_NODE_VERSION}`,
+      detail: `registered Node is ${version || 'an unknown version'}; v${REQUIRED_NODE_VERSION} is required`,
     };
   }
-  return { usable: true, detail: `${command}（${version}）` };
+  return { usable: true, detail: `${command} (${version})` };
 }
 
 function classifyCurrentRegistration(entry, desired) {
@@ -151,13 +151,13 @@ function classifyCurrentRegistration(entry, desired) {
 function requireInstallPrerequisites() {
   if (process.versions.node !== REQUIRED_NODE_VERSION) {
     throw new Error(
-      `需要 Node ${REQUIRED_NODE_VERSION}，目前是 ${process.versions.node}。請先切到專案 .nvmrc 指定版本。`,
+      `Node ${REQUIRED_NODE_VERSION} is required; this is ${process.versions.node}. Switch to the version in the project's .nvmrc first.`,
     );
   }
-  if (!existsSync(LAUNCHER_PATH)) throw new Error(`找不到 launcher：${LAUNCHER_PATH}`);
+  if (!existsSync(LAUNCHER_PATH)) throw new Error(`Launcher not found: ${LAUNCHER_PATH}`);
   if (!existsSync(DIST_PATH)) {
     throw new Error(
-      `找不到建置產物：${DIST_PATH}\n請先在這台機器執行 corepack pnpm install 與 corepack pnpm run build。`,
+      `Build output not found: ${DIST_PATH}\nRun corepack pnpm install and corepack pnpm run build on this machine first.`,
     );
   }
 }
@@ -167,8 +167,8 @@ function mismatchMessage(client, classification) {
     ? `\n- ${classification.differences.join('\n- ')}`
     : '';
   return (
-    `${client.label} 已有同名 ${MCP_NAME} 設定，但與這份工作樹不相容。為避免遺失既有 timeout、tool policy 或其他設定，安裝器不會自動覆寫。` +
-    `${details}\n請先確認那份設定的用途；若確定不要它，再明確執行 ${client.binary} mcp remove ${MCP_NAME}，之後重跑安裝。`
+    `${client.label} already has an entry named ${MCP_NAME}, but it does not match this checkout. The installer will not overwrite it, so no existing timeout, tool policy or other setting is lost.` +
+    `${details}\nCheck what that entry is for first. If you are sure you do not need it, run ${client.binary} mcp remove ${MCP_NAME} yourself, then run the installer again.`
   );
 }
 
@@ -178,7 +178,7 @@ async function withTimeout(promise, timeoutMs, label) {
     return await Promise.race([
       promise,
       new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`${label} 超過 ${String(timeoutMs)} ms`)), timeoutMs);
+        timer = setTimeout(() => reject(new Error(`${label} took longer than ${String(timeoutMs)} ms`)), timeoutMs);
         timer.unref();
       }),
     ]);
@@ -191,7 +191,7 @@ async function assertPortReusable(port) {
   const probe = createServer();
   try {
     probe.listen(port, '127.0.0.1');
-    await withTimeout(once(probe, 'listening'), 3000, `重綁 127.0.0.1:${String(port)}`);
+    await withTimeout(once(probe, 'listening'), 3000, `rebinding 127.0.0.1:${String(port)}`);
   } finally {
     if (probe.listening) {
       await new Promise((resolve, reject) => {
@@ -203,14 +203,14 @@ async function assertPortReusable(port) {
 
 async function smokeRegistration(registration, label) {
   const configured = registration?.transport;
-  if (configured?.type !== 'stdio') throw new Error(`${label} 不是 stdio registration`);
+  if (configured?.type !== 'stdio') throw new Error(`${label} is not a stdio registration`);
   if (typeof configured.command !== 'string' || !Array.isArray(configured.args)) {
-    throw new Error(`${label} 缺少 command／args`);
+    throw new Error(`${label} is missing command/args`);
   }
 
   const configuredEnvironment = {};
   for (const [key, value] of Object.entries(configured.env ?? {})) {
-    if (typeof value !== 'string') throw new Error(`${label} 的 env ${key} 不是字串`);
+    if (typeof value !== 'string') throw new Error(`env ${key} of ${label} is not a string`);
     configuredEnvironment[key] = value;
   }
 
@@ -241,7 +241,7 @@ async function smokeRegistration(registration, label) {
     ]);
     if (tools.length !== EXPECTED_TOOL_COUNT || resources.length !== EXPECTED_RESOURCE_COUNT) {
       throw new Error(
-        `${label} 工具面不符：${String(tools.length)} tools／${String(resources.length)} resources`,
+        `${label} has an unexpected tool surface: ${String(tools.length)} tools / ${String(resources.length)} resources`,
       );
     }
     const status = await client.callTool(
@@ -255,7 +255,7 @@ async function smokeRegistration(registration, label) {
       typeof listeningPort !== 'number' ||
       listeningPort <= 0
     ) {
-      throw new Error(`${label} 沒有回報有效的 loopback 監聽埠`);
+      throw new Error(`${label} did not report a valid loopback listening port`);
     }
   } finally {
     try {
@@ -276,15 +276,15 @@ async function install(client) {
   const { classification } = classifyCurrentRegistration(before, desired);
 
   if (classification.kind === 'exact') {
-    await smokeRegistration(before, `現有 ${client.label} entry`);
-    process.stdout.write(`BlockHand 已在 ${client.label} 正確登記，沒有修改設定。\n`);
+    await smokeRegistration(before, `existing ${client.label} entry`);
+    process.stdout.write(`BlockHand is already registered correctly in ${client.label}; no settings were changed.\n`);
     return;
   }
   if (classification.kind === 'compatible') {
-    await smokeRegistration(before, `現有 ${client.label} entry`);
+    await smokeRegistration(before, `existing ${client.label} entry`);
     process.stdout.write(
-      `BlockHand 已用同一工作樹的相容設定登記到 ${client.label}，保留既有設定不做 remove/add。\n` +
-      `執行 corepack pnpm run doctor 可檢查目前 Node 與完整 MCP 生命週期。\n`,
+      `BlockHand is already registered in ${client.label} with a compatible entry from this checkout; it was kept as is (no remove/add).\n` +
+      `Run corepack pnpm run doctor to check the current Node and the full MCP lifecycle.\n`,
     );
     return;
   }
@@ -292,7 +292,7 @@ async function install(client) {
 
   // 先用將要寫入的精確 command／args／env 完成 initialize；舊 dist、錯誤
   // launcher 或不可執行 Node 都會在任何持久設定變更之前失敗。
-  await smokeRegistration(desired, '待登記 entry');
+  await smokeRegistration(desired, 'entry to be registered');
 
   const result = run(clientCommand(client), client.buildAddArguments(desired));
   if (result.status !== 0) {
@@ -303,12 +303,12 @@ async function install(client) {
   const verified = classifyCurrentRegistration(after, desired).classification;
   if (verified.kind !== 'exact') {
     throw new Error(
-      `${client.label} 回報新增完成，但重新讀取後設定不一致。請執行 corepack pnpm run doctor 查看細節；安裝器沒有改寫其他 entry。`,
+      `${client.label} reported the entry as added, but reading it back shows a different entry. Run corepack pnpm run doctor for details; the installer did not change any other entry.`,
     );
   }
 
   process.stdout.write(
-    `BlockHand 已登記到這台機器的 ${client.label}（${client.configHint}）。\n${client.restartHint}\n`,
+    `BlockHand is now registered in ${client.label} on this machine (${client.configHint}).\n${client.restartHint}\n`,
   );
 }
 
@@ -321,12 +321,12 @@ function uninstall(client) {
     registeredNodeUsable: true,
   });
   if (classification.kind === 'missing') {
-    process.stdout.write(`BlockHand 原本就沒有登記到 ${client.label}，沒有修改設定。\n`);
+    process.stdout.write(`BlockHand was not registered in ${client.label}; no settings were changed.\n`);
     return;
   }
   if (classification.kind !== 'exact' && classification.kind !== 'compatible') {
     throw new Error(
-      `同名 ${MCP_NAME} entry 不是這份工作樹可安全辨識的 BlockHand；為避免誤刪，已停止。`,
+      `The ${MCP_NAME} entry cannot be safely identified as BlockHand from this checkout; stopped so the wrong entry is not removed.`,
     );
   }
 
@@ -335,10 +335,10 @@ function uninstall(client) {
     throw new Error(summarizeCommandFailure(`${client.binary} mcp remove`, result));
   }
   if (currentRegistration(client) !== null) {
-    throw new Error(`${client.label} 回報移除完成，但 entry 仍存在。`);
+    throw new Error(`${client.label} reported the entry as removed, but it is still there.`);
   }
   process.stdout.write(
-    `已移除這台機器的 BlockHand ${client.label} 登記；專案、Minecraft 與世界都沒有刪除。\n`,
+    `Removed the BlockHand registration from ${client.label} on this machine; the project, Minecraft and your worlds were not deleted.\n`,
   );
 }
 
@@ -356,14 +356,14 @@ function inspectPnpm(checks) {
       checks,
       'pnpm-version',
       'fail',
-      `目前透過 pnpm ${match[1]} 執行；專案固定 ${EXPECTED_PNPM_VERSION}`,
+      `Running through pnpm ${match[1]}; the project pins ${EXPECTED_PNPM_VERSION}`,
     );
   } else {
     addCheck(
       checks,
       'pnpm-version',
       'warn',
-      `無法從執行環境確認 pnpm；建議用 corepack pnpm run doctor（固定 ${EXPECTED_PNPM_VERSION}）`,
+      `Could not tell the pnpm version from the environment; use corepack pnpm run doctor (pinned to ${EXPECTED_PNPM_VERSION})`,
     );
   }
 }
@@ -373,7 +373,7 @@ function inspectPlatform(checks) {
   if (currentPlatform === 'darwin') {
     const versionResult = run('/usr/bin/sw_vers', ['-productVersion']);
     if (versionResult.status !== 0) {
-      addCheck(checks, 'macos-version', 'fail', '無法讀取 macOS 版本；Minecraft 真機驗收需 macOS 14+');
+      addCheck(checks, 'macos-version', 'fail', 'Could not read the macOS version; live Minecraft testing needs macOS 14+');
     } else {
       const version = versionResult.stdout.trim();
       const major = Number.parseInt(version.split('.')[0] ?? '', 10);
@@ -381,12 +381,12 @@ function inspectPlatform(checks) {
         checks,
         'macos-version',
         Number.isFinite(major) && major >= 14 ? 'pass' : 'fail',
-        `macOS ${version || '未知'}；Minecraft Education 目前最低需求為 macOS 14`,
+        `macOS ${version || 'unknown'}; Minecraft Education currently needs macOS 14 or later`,
       );
     }
 
     const hardware = run('/usr/bin/uname', ['-m']);
-    const hardwareArch = hardware.status === 0 ? hardware.stdout.trim() : '未知';
+    const hardwareArch = hardware.status === 0 ? hardware.stdout.trim() : 'unknown';
     const nodeArch = arch();
     const translatedResult = run('/usr/sbin/sysctl', ['-in', 'sysctl.proc_translated']);
     const translated = translatedResult.status === 0 && translatedResult.stdout.trim() === '1';
@@ -397,20 +397,20 @@ function inspectPlatform(checks) {
       checks,
       'architecture',
       mismatch || translated ? 'warn' : 'pass',
-      `Node 架構 ${nodeArch}；uname ${hardwareArch}${translated ? '；Rosetta 轉譯中' : mismatch ? '（架構不一致）' : ''}`,
+      `Node architecture ${nodeArch}; uname ${hardwareArch}${translated ? '; running under Rosetta translation' : mismatch ? ' (architectures differ)' : ''}`,
     );
     return;
   }
 
   if (currentPlatform === 'win32') {
-    addCheck(checks, 'platform', 'pass', `Windows ${arch()}；用於本機回歸驗證`);
+    addCheck(checks, 'platform', 'pass', `Windows ${arch()}; used for local regression testing`);
     return;
   }
   addCheck(
     checks,
     'platform',
     'fail',
-    `${currentPlatform}/${arch()} 尚未列入 Minecraft Education 支援矩陣`,
+    `${currentPlatform}/${arch()} is not in the Minecraft Education support matrix`,
   );
 }
 
@@ -424,7 +424,7 @@ function inspectRegistration(checks, client) {
         checks,
         'client-registration',
         'pass',
-        `${client.label} 登記使用可執行的絕對 Node 與 launcher 路徑`,
+        `${client.label} registration uses absolute, runnable Node and launcher paths`,
         node.detail,
       );
     } else if (classification.kind === 'compatible') {
@@ -432,23 +432,23 @@ function inspectRegistration(checks, client) {
         checks,
         'client-registration',
         'warn',
-        `${client.label} 使用同一工作樹的相容既有設定；保留 timeout／tool policy，不強制遷移`,
-        [node.detail, ...classification.differences].filter(Boolean).join('；'),
+        `${client.label} uses a compatible existing entry from this checkout; its timeout/tool policy is kept, no forced migration`,
+        [node.detail, ...classification.differences].filter(Boolean).join('; '),
       );
     } else if (classification.kind === 'missing') {
       addCheck(
         checks,
         'client-registration',
         'fail',
-        `尚未在這台機器登記到 ${client.label}；請執行 corepack pnpm run setup:${client.id}`,
+        `Not registered in ${client.label} on this machine yet; run corepack pnpm run setup:${client.id}`,
       );
     } else {
       addCheck(
         checks,
         'client-registration',
         'fail',
-        `同名 ${client.label} entry 與這份工作樹不相容（${classification.kind}）`,
-        classification.differences.join('；'),
+        `The ${client.label} entry with this name does not match this checkout (${classification.kind})`,
+        classification.differences.join('; '),
       );
     }
     return { entry, classification };
@@ -457,7 +457,7 @@ function inspectRegistration(checks, client) {
       checks,
       'client-cli',
       'fail',
-      `無法讀取 ${client.label} MCP 設定`,
+      `Could not read the ${client.label} MCP settings`,
       error instanceof Error ? error.message : String(error),
     );
     return null;
@@ -474,24 +474,24 @@ async function inspectConfiguredSmoke(checks, registrationState, client) {
       checks,
       'registered-entry-smoke',
       'fail',
-      `${client.label} entry 不可用，未執行實際 registration smoke`,
+      `${client.label} entry is not usable; the registered-entry smoke was skipped`,
     );
     return;
   }
   try {
-    const port = await smokeRegistration(registrationState.entry, `${client.label} 實際 entry`);
+    const port = await smokeRegistration(registrationState.entry, `${client.label} registered entry`);
     addCheck(
       checks,
       'registered-entry-smoke',
       'pass',
-      `已用 ${client.label} 登記的 command／args／env 完成 initialize，隔離埠 ${String(port)} 已釋放`,
+      `Initialized with the command/args/env registered in ${client.label}; isolated port ${String(port)} was released`,
     );
   } catch (error) {
     addCheck(
       checks,
       'registered-entry-smoke',
       'fail',
-      `${client.label} 實際 entry 無法完成 MCP initialize`,
+      `${client.label} registered entry could not complete MCP initialize`,
       error instanceof Error ? error.message : String(error),
     );
   }
@@ -499,7 +499,7 @@ async function inspectConfiguredSmoke(checks, registrationState, client) {
 
 function inspectSmoke(checks) {
   if (process.versions.node !== REQUIRED_NODE_VERSION || !existsSync(DIST_PATH)) {
-    addCheck(checks, 'mcp-smoke', 'fail', '缺少正確 Node 或 dist，未執行 MCP smoke');
+    addCheck(checks, 'mcp-smoke', 'fail', 'Wrong Node version or missing dist; MCP smoke skipped');
     return;
   }
   const result = run(process.execPath, [SMOKE_PATH], {
@@ -517,7 +517,7 @@ function inspectSmoke(checks) {
       checks,
       'mcp-smoke',
       'pass',
-      `${String(EXPECTED_TOOL_COUNT)} tools／${String(EXPECTED_RESOURCE_COUNT)} resources、stdio EOF 與監聽埠釋放通過`,
+      `${String(EXPECTED_TOOL_COUNT)} tools / ${String(EXPECTED_RESOURCE_COUNT)} resources, stdio EOF and listening-port release passed`,
     );
   } else {
     addCheck(checks, 'mcp-smoke', 'fail', summarizeCommandFailure('stdio smoke', result));
@@ -530,14 +530,14 @@ async function doctor({ json, client }) {
     checks,
     'node-version',
     process.versions.node === REQUIRED_NODE_VERSION ? 'pass' : 'fail',
-    `Node ${process.versions.node}（需要 ${REQUIRED_NODE_VERSION}）`,
+    `Node ${process.versions.node} (requires ${REQUIRED_NODE_VERSION})`,
     canonicalPath(process.execPath),
   );
   addCheck(
     checks,
     'build-output',
     existsSync(DIST_PATH) ? 'pass' : 'fail',
-    existsSync(DIST_PATH) ? 'dist/index.js 已存在' : '缺少 dist/index.js；請先 build',
+    existsSync(DIST_PATH) ? 'dist/index.js exists' : 'dist/index.js is missing; run the build first',
     DIST_PATH,
   );
   inspectPnpm(checks);
@@ -576,14 +576,14 @@ async function doctor({ json, client }) {
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   } else {
     process.stdout.write(
-      `BlockHand doctor — ${client.label}（不修改持久設定、不啟動 Minecraft）\n\n`,
+      `BlockHand doctor — ${client.label} (changes no persistent settings, does not start Minecraft)\n\n`,
     );
     for (const check of checks) {
       const marker = check.status === 'pass' ? '✓' : check.status === 'warn' ? '!' : '✗';
       process.stdout.write(`${marker} ${check.message}${check.detail ? `\n  ${check.detail}` : ''}\n`);
     }
     process.stdout.write(
-      `\n${ok ? '診斷通過。' : '診斷未通過。'}Mac 遊戲 live 狀態：尚待 macOS 14+ 真機驗證。\n`,
+      `\n${ok ? 'All checks passed.' : 'Some checks failed.'} Live game on Mac: not yet verified on real macOS 14+ hardware.\n`,
     );
   }
   if (!ok) process.exitCode = 1;
@@ -591,23 +591,23 @@ async function doctor({ json, client }) {
 
 function connectGuide() {
   process.stdout.write(
-    `BlockHand 不會操作前景視窗或替你輸入鍵盤。\n` +
-    `請在目前的 AI 對話中呼叫 mc_status，查看它回傳的 connectCommand；進入已開啟 Cheats 的 Minecraft Education 世界後，手動輸入到聊天列。\n` +
-    `重連時在聊天列按 T 再按 ↑ 就能叫回上一條指令。\n` +
-    `所有 AI 對話共用同一個背景中樞，所以指令通常固定是 /connect 127.0.0.1:19131；\n` +
-    `只有 19131 被舊版 BlockHand 佔住、退回獨立模式時埠才會不同，這時以 mc_status 為準。\n`,
+    `BlockHand never touches the foreground window or types for you.\n` +
+    `In your current AI conversation, call mc_status and look at the connectCommand it returns. Then, in a Minecraft Education world with Cheats on, type it into the chat yourself.\n` +
+    `To reconnect, press T to open the chat, then press ↑ to bring back the last command.\n` +
+    `All AI conversations share one background hub, so the command is normally /connect 127.0.0.1:19131.\n` +
+    `The port differs only when an older BlockHand holds 19131 and this one falls back to standalone mode; then go by mc_status.\n`,
   );
 }
 
 function usage() {
   process.stdout.write(
-    `用法（--client 預設 codex，可選 ${CLIENT_IDS.join('｜')}）：\n` +
-    `  corepack pnpm blockhand install [--client=X]    在這台機器登記 MCP\n` +
-    `  corepack pnpm blockhand doctor [--client=X]     執行不碰 Minecraft 的診斷\n` +
-    `  corepack pnpm blockhand doctor --json           輸出結構化診斷\n` +
-    `  corepack pnpm blockhand connect                 顯示安全的手動連線指引\n` +
-    `  corepack pnpm blockhand uninstall [--client=X]  移除這台機器的 MCP 登記\n` +
-    `\n捷徑：corepack pnpm run setup:codex｜setup:claude｜setup:gemini｜setup:grok\n`,
+    `Usage (--client defaults to codex; one of ${CLIENT_IDS.join(' | ')}):\n` +
+    `  corepack pnpm blockhand install [--client=X]    register the MCP server on this machine\n` +
+    `  corepack pnpm blockhand doctor [--client=X]     run checks that do not touch Minecraft\n` +
+    `  corepack pnpm blockhand doctor --json           print the checks as JSON\n` +
+    `  corepack pnpm blockhand connect                 show how to connect the game by hand\n` +
+    `  corepack pnpm blockhand uninstall [--client=X]  remove the MCP registration from this machine\n` +
+    `\nShortcuts: corepack pnpm run setup:codex | setup:claude | setup:gemini | setup:grok\n`,
   );
 }
 
@@ -615,7 +615,7 @@ class UsageError extends Error {}
 
 function requireNoArguments(command, arguments_) {
   if (arguments_.length > 0) {
-    throw new UsageError(`${command} 不接受參數：${arguments_.join(' ')}`);
+    throw new UsageError(`${command} takes no arguments: ${arguments_.join(' ')}`);
   }
 }
 
@@ -633,7 +633,7 @@ function extractClient(command, arguments_) {
       rest.push(argument);
       continue;
     }
-    if (seen) throw new UsageError(`${command} 只接受一次 --client`);
+    if (seen) throw new UsageError(`${command} accepts --client only once`);
     seen = true;
     id = match[1];
   }
@@ -648,7 +648,7 @@ function parseDoctorArguments(arguments_) {
   const { client, rest } = extractClient('doctor', arguments_);
   if (rest.length === 0) return { json: false, client };
   if (rest.length === 1 && rest[0] === '--json') return { json: true, client };
-  throw new UsageError(`doctor 只接受一次 --json 與一次 --client；收到：${arguments_.join(' ')}`);
+  throw new UsageError(`doctor accepts at most one --json and one --client; got: ${arguments_.join(' ')}`);
 }
 
 const [command, ...arguments_] = process.argv.slice(2);
@@ -670,9 +670,9 @@ try {
     usage();
   } else {
     usage();
-    throw new UsageError(`不支援的指令：${command}`);
+    throw new UsageError(`Unknown command: ${command}`);
   }
 } catch (error) {
-  process.stderr.write(`BlockHand：${error instanceof Error ? error.message : String(error)}\n`);
+  process.stderr.write(`BlockHand: ${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = error instanceof UsageError ? 2 : 1;
 }

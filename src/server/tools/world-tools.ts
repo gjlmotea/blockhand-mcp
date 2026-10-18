@@ -22,9 +22,9 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_set_block',
     {
-      title: '放置單一方塊',
+      title: 'Place one block',
       description:
-        '在指定座標放一個方塊。大量方塊請改用 mc_fill 或 mc_build_shape——逐格呼叫這個工具會非常慢。',
+        'Place one block at a coordinate. For many blocks use mc_fill or mc_build_shape instead; calling this tool block by block is very slow.',
       inputSchema: z
         .object({
           position: coordinateSchema(),
@@ -39,7 +39,7 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
     async ({ position, block, blockStates, handling }) =>
       guard(async () => {
         const coordinate = toCoordinate(position);
-        assertPlaceableCoordinate(coordinate, '放置座標');
+        assertPlaceableCoordinate(coordinate, 'position');
         const outcome = await service.run(
           worldCommands.setBlock(coordinate, block, blockStates, handling),
         );
@@ -50,9 +50,9 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_fill',
     {
-      title: '填滿一個長方體',
+      title: 'Fill a box',
       description:
-        '用同一種方塊填滿 from 到 to 的長方體。Bedrock 單次上限 32768 格；超過請改用 mc_build_shape，它會自動拆批。mode=hollow 只留外殼、outline 只留邊框。',
+        'Fill the box from from to to with one kind of block. Bedrock allows at most 32768 blocks per fill; beyond that use mc_build_shape, which splits the work into batches automatically. mode=hollow keeps only the shell, outline keeps only the edges.',
       inputSchema: z
         .object({
           from: coordinateSchema(),
@@ -60,7 +60,7 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
           block: blockNameSchema(),
           blockStates: blockStatesSchema().nullable().default(null),
           mode: z.enum(FILL_MODES).nullable().default(null),
-          replaceBlock: blockNameSchema().nullable().default(null).describe('只在 mode="replace" 時有效'),
+          replaceBlock: blockNameSchema().nullable().default(null).describe('Only used when mode="replace"'),
           replaceStates: blockStatesSchema().nullable().default(null),
         })
         .strict(),
@@ -71,8 +71,8 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
       guard(async () => {
         const fromCoordinate = toCoordinate(from);
         const toCoordinateValue = toCoordinate(to);
-        assertPlaceableCoordinate(fromCoordinate, '起點');
-        assertPlaceableCoordinate(toCoordinateValue, '終點');
+        assertPlaceableCoordinate(fromCoordinate, 'from');
+        assertPlaceableCoordinate(toCoordinateValue, 'to');
         const outcome = await service.run(
           worldCommands.fill(
             fromCoordinate,
@@ -91,9 +91,9 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_clone',
     {
-      title: '複製一塊區域',
+      title: 'Clone a region',
       description:
-        '把 begin–end 的區域複製到 destination。cloneMode="move" 會把原地清空。適合把手工蓋好的樣板量產。',
+        'Copy the region from begin to end to destination. cloneMode="move" clears the original. Good for mass-producing a hand-built template.',
       inputSchema: z
         .object({
           begin: coordinateSchema(),
@@ -124,8 +124,8 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_test_block',
     {
-      title: '檢查某座標是不是指定方塊',
-      description: '不改變世界，只回報該座標是否為指定方塊。建造前確認地形、或驗證剛才蓋的東西時用。',
+      title: 'Test whether a coordinate holds a block',
+      description: 'Report whether a coordinate holds the given block, without changing the world. Use it to check the terrain before building or to verify what was just built.',
       inputSchema: z
         .object({
           position: coordinateSchema(),
@@ -143,7 +143,7 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
         );
         return ok(
           { ...outcomeToPayload(outcome), matches: outcome.ok },
-          outcome.ok ? `符合：該座標是 ${block}。` : `不符合：${outcome.statusMessage ?? '該座標不是指定方塊'}${notInWorldHint(outcome)}`,
+          outcome.ok ? `Match: the coordinate is ${block}.` : `No match: ${outcome.statusMessage ?? 'the coordinate is not that block'}${notInWorldHint(outcome)}`,
         );
       }),
   );
@@ -151,42 +151,42 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_analyze_symmetry',
     {
-      title: '分析建築的鏡像對稱程度',
+      title: 'Analyze how mirror-symmetric a build is',
       description:
-        '檢查一塊區域是否左右（或前後）對稱，並在不對稱時指出**哪幾塊**不對稱。' +
-        '批改學生作品用這個：分數是對稱格子的比例，不是憑感覺。' +
-        '原理：testforblocks 只會平移比對不會鏡像，所以先用 structure save／load ' +
-        '的 mirror 參數做出鏡像副本，再跟原區比對。' +
-        '⚠️ 這會**暫時寫入** scratch 指定的暫存區：流程一定先備份該區內容，比對完立刻還原；' +
-        '備份失敗就中止且不動世界。scratch 不可與分析區重疊，否則鏡像副本會蓋掉原始建築。' +
-        '區域受 structure 指令上限限制（64×384×64）。',
+        'Check whether a region is symmetric left to right (or front to back), and when it is not, point out **which parts** are not. ' +
+        'Use it to grade student builds: the score is the share of symmetric cells, not a gut feeling. ' +
+        'How it works: testforblocks only compares by translation, never mirrored, so a mirrored copy is made first with the mirror option of structure save / load ' +
+        'and then compared with the original. ' +
+        'Warning: this **temporarily writes** to the scratch area: its contents are always backed up first and restored right after the comparison; ' +
+        'if the backup fails, it stops without touching the world. scratch must not overlap the analyzed region, or the mirrored copy overwrites the original build. ' +
+        'The region is limited by the structure command (64x384x64).',
       inputSchema: z
         .object({
-          from: coordinateSchema().describe('分析區的一角'),
-          to: coordinateSchema().describe('分析區的對角'),
+          from: coordinateSchema().describe('One corner of the analyzed region'),
+          to: coordinateSchema().describe('The opposite corner of the analyzed region'),
           mirror: z
             .enum(['x', 'z', 'xz'])
             .default('x')
-            .describe('鏡射軸；x 檢查左右對稱、z 檢查前後對稱、xz 兩軸都要'),
-          scratch: coordinateSchema().describe('暫存區最小角；會被覆蓋後還原，不可與分析區重疊'),
+            .describe('Mirror axis: x checks left-right symmetry, z checks front-back symmetry, xz requires both'),
+          scratch: coordinateSchema().describe('Minimum corner of the scratch area; it is overwritten and then restored, and must not overlap the analyzed region'),
           cellsPerAxis: z
             .number()
             .int()
             .min(1)
             .max(4)
             .default(2)
-            .describe('整體不對稱時的細分粒度；每軸 n 段共 n³ 格，每格一條指令'),
+            .describe('Subdivision when the whole region is not symmetric: n parts per axis, n^3 cells, one command per cell'),
         })
         .strict(),
       outputSchema: z
         .object({
           symmetric: z.boolean(),
-          score: z.number().describe('0–100，對稱格子的比例'),
+          score: z.number().describe('0-100, the share of symmetric cells'),
           matchedCells: z.number(),
           totalCells: z.number(),
           mirror: z.string(),
           commandsIssued: z.number(),
-          scratchRestored: z.boolean().describe('false 代表暫存區沒還原成功，世界被留下改動'),
+          scratchRestored: z.boolean().describe('false means the scratch area was not restored and the world was left changed'),
           asymmetricCells: z.array(
             z.object({
               min: z.object({ x: z.number(), y: z.number(), z: z.number() }),
@@ -206,11 +206,11 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
           scratch: toCoordinate(scratch),
           cellsPerAxis,
         });
-        const warning = report.scratchRestored ? '' : '⚠️ 暫存區還原失敗，世界被留下改動。';
+        const warning = report.scratchRestored ? '' : ' Warning: restoring the scratch area failed, so the world was left changed.';
         const summary = report.symmetric
-          ? `完全對稱（${report.mirror} 軸）。${warning}`
-          : `對稱度 ${String(report.score)}%（${String(report.matchedCells)}/${String(report.totalCells)} 格相符）；` +
-            `不對稱的區塊有 ${String(report.asymmetricCells.length)} 塊。${warning}`;
+          ? `Fully symmetric (${report.mirror} axis).${warning}`
+          : `Symmetry ${String(report.score)}% (${String(report.matchedCells)}/${String(report.totalCells)} cells match); ` +
+            `${String(report.asymmetricCells.length)} cells are not symmetric.${warning}`;
         return ok(
           {
             symmetric: report.symmetric,
@@ -230,17 +230,17 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_read_block',
     {
-      title: '讀取某座標實際是什麼方塊',
+      title: 'Read which block is at a coordinate',
       description:
-        '回報該座標實際上放著什麼，不需要你先猜。Education 沒有讀取方塊的指令，' +
-        '這裡是拿空氣當哨兵去 testforblock，猜錯時遊戲的訊息會把實際方塊講出來。' +
-        '注意：回傳的是**在地化顯示名稱**（例如「泥土」）而不是方塊 ID（dirt），' +
-        '不能直接餵回 mc_set_block；要用 ID 判斷請改用 mc_test_block。' +
-        '訊息格式沒有官方保證，解析不出來時 block 會是 null 並附上原始訊息，不會亂猜。',
+        'Report what is actually at a coordinate, without you having to guess first. Education has no command to read a block, ' +
+        'so this runs testforblock with air as a sentinel; when the guess is wrong, the game message names the actual block. ' +
+        'Note: it returns the **localized display name** (for example "Dirt", or "泥土" in a Chinese game), not the block ID (dirt), ' +
+        'so it cannot be fed back to mc_set_block; to check by ID, use mc_test_block. ' +
+        'The message format has no official guarantee; when it cannot be parsed, this tool returns an error with the raw message instead of guessing.',
       inputSchema: z.object({ position: coordinateSchema() }).strict(),
       outputSchema: commandOutcomeSchema()
         .extend({
-          block: z.string().describe('在地化顯示名稱；解析不出來時本工具回錯誤而不是 null'),
+          block: z.string().describe('Localized display name; when it cannot be parsed, this tool returns an error instead of null'),
           isAir: z.boolean(),
           raw: z.string().nullable(),
         })
@@ -262,10 +262,10 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
         // 錯誤沒辦法被當成資料繼續用，這就是重點。
         if (reading.block === null) {
           return fail(
-            `讀不出 ${String(position.x)},${String(position.y)},${String(position.z)} 的方塊名稱。` +
-              '**這不代表那裡是空的**——是遊戲回的訊息格式不符合預期，本工具無法判定。' +
-              '最可能的原因是 Minecraft 改版改了訊息文字，或遊戲語言不是繁中／簡中／英文。' +
-              `請用 mc_verify_reading 確認解析路徑是否仍然有效。遊戲原始訊息：${reading.raw ?? '(無)'}${notInWorldHint(outcome)}`,
+            `Could not read the block name at ${String(position.x)},${String(position.y)},${String(position.z)}. ` +
+              '**This does not mean the spot is empty**: the game message did not match the expected format, so this tool cannot tell. ' +
+              'The most likely causes are a Minecraft update that changed the message text, or a game language other than Traditional Chinese, Simplified Chinese or English. ' +
+              `Use mc_verify_reading to check whether the reading path still works. Raw game message: ${reading.raw ?? '(none)'}${notInWorldHint(outcome)}`,
           );
         }
 
@@ -276,7 +276,7 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
             isAir: reading.isSentinel,
             raw: reading.raw,
           },
-          reading.isSentinel ? '該座標是空氣（沒有方塊）。' : `該座標是 ${reading.block}。`,
+          reading.isSentinel ? 'The coordinate is air (no block).' : `The coordinate is ${reading.block}.`,
         );
       }),
   );
@@ -284,22 +284,22 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_verify_reading',
     {
-      title: '驗證「讀方塊」這條路還有效',
+      title: 'Verify that block reading still works',
       description:
-        '讀方塊靠的是 testforblock **失敗訊息**會洩漏方塊名稱，而那個訊息格式沒有官方穩定性保證。' +
-        '遊戲改版改了文案、或遊戲語言不是繁中／簡中／英文，解析就會失效——而且失效的樣子是**安靜的**。' +
-        '這支探測會主動驗證解析路徑是否仍然有效，**上課前跑一次**就知道 mc_read_block 的結果能不能信。' +
-        '它不需要事先知道那格是什麼：若該格是空氣，就拿基岩去問（保證不符）逼出失敗訊息；' +
-        '若該格有東西，第一問就已經給了訊息。最多兩條指令，完全不寫入世界。' +
-        'parseable=false 代表協定已漂移，此時 mc_read_block 的結果一律不可信。',
+        'Block reading relies on the testforblock **failure message** revealing the block name, and that message format has no official stability guarantee. ' +
+        'When a game update changes the wording, or the game language is not Traditional Chinese, Simplified Chinese or English, parsing breaks, and it breaks **silently**. ' +
+        'This probe actively checks whether the reading path still works; **run it once before class** to know whether mc_read_block results can be trusted. ' +
+        'It does not need to know what is at the spot: if it is air, it asks about bedrock (a guaranteed mismatch) to force a failure message; ' +
+        'if something is there, the first question already produced a message. At most two commands, and it never writes to the world. ' +
+        'parseable=false means the protocol has drifted, and mc_read_block results cannot be trusted at all.',
       inputSchema: z
         .object({
-          position: coordinateSchema().describe('任一座標皆可，空的或有方塊都行'),
+          position: coordinateSchema().describe('Any coordinate works, empty or not'),
         })
         .strict(),
       outputSchema: z
         .object({
-          parseable: z.boolean().describe('false 代表協定已漂移，讀方塊不可信'),
+          parseable: z.boolean().describe('false means the protocol has drifted and block reading cannot be trusted'),
           parsedName: z.string().nullable(),
           raw: z.string().nullable(),
           branch: z.string(),
@@ -320,9 +320,9 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
             commandsIssued: report.commandsIssued,
           },
           report.parseable
-            ? `解析路徑正常：從遊戲訊息成功讀出「${report.parsedName ?? ''}」。mc_read_block 可信。`
-            : '⚠️ 解析路徑已失效——遊戲訊息不符合任何已知格式。' +
-              `mc_read_block 的結果一律不可信，請勿據以判斷「那裡是空的」。原始訊息：${report.raw ?? '(無)'}`,
+            ? `The reading path works: read "${report.parsedName ?? ''}" from the game message. mc_read_block can be trusted.`
+            : 'Warning: the reading path is broken; the game message matches no known format. ' +
+              `mc_read_block results cannot be trusted at all; do not conclude from them that a spot is empty. Raw message: ${report.raw ?? '(none)'}`,
         );
       }),
   );
@@ -330,19 +330,19 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_compare_regions',
     {
-      title: '比對兩個等大區域是否一致',
+      title: 'Compare two regions of equal size',
       description:
-        '用一條指令比對整片區域，適合檢查學生蓋的東西跟參考範例是否相同。' +
-        '逐格比對在幾百格以上就會撞到 MCP host 逾時，這個不會。' +
-        'masked=true 會忽略來源區域裡的空氣，只檢查「該有的東西在不在」，' +
-        '不管周圍多了什麼；masked=false 則要求完全一致。' +
-        '兩個區域大小必須相同，destination 是目標區域的最小角。',
+        'Compare a whole region with one command; good for checking whether a student build matches a reference. ' +
+        'Comparing block by block hits the MCP host timeout beyond a few hundred blocks; this does not. ' +
+        'masked=true ignores air in the source region and only checks that what should be there is there, ' +
+        'regardless of anything extra around it; masked=false requires an exact match. ' +
+        'Both regions must be the same size; destination is the minimum corner of the target region.',
       inputSchema: z
         .object({
-          begin: coordinateSchema().describe('來源區域的一角'),
-          end: coordinateSchema().describe('來源區域的對角'),
-          destination: coordinateSchema().describe('目標區域的最小角'),
-          masked: z.boolean().default(false).describe('true 時忽略來源的空氣'),
+          begin: coordinateSchema().describe('One corner of the source region'),
+          end: coordinateSchema().describe('The opposite corner of the source region'),
+          destination: coordinateSchema().describe('Minimum corner of the target region'),
+          masked: z.boolean().default(false).describe('When true, air in the source is ignored'),
         })
         .strict(),
       outputSchema: commandOutcomeSchema().extend({ identical: z.boolean() }).strict(),
@@ -361,8 +361,8 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
         return ok(
           { ...outcomeToPayload(outcome), identical: outcome.ok },
           outcome.ok
-            ? `兩個區域一致${masked ? '（忽略空氣）' : ''}。`
-            : `不一致：${outcome.statusMessage ?? '區域內容有差異'}${notInWorldHint(outcome)}`,
+            ? `The regions match${masked ? ' (air ignored)' : ''}.`
+            : `No match: ${outcome.statusMessage ?? 'the regions differ'}${notInWorldHint(outcome)}`,
         );
       }),
   );
@@ -370,10 +370,10 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_query_target',
     {
-      title: '查詢實體位置與朝向',
+      title: 'Query entity position and facing',
       description:
-        '用選擇器查詢實體的座標、朝向與唯一 ID，回傳已解析的 JSON。這是取得玩家或 Agent 目前位置的正規做法——建造前先問這個，才知道要蓋在哪裡。' +
-        '預設用 @p（最近的玩家）而非 @s：WebSocket 送進來的指令沒有實體身分，@s 在部分情況下無法解析。',
+        'Query the coordinates, facing and unique ID of entities by selector, returned as parsed JSON. This is the standard way to get the current position of the player or the Agent; ask this before building so you know where to build. ' +
+        'It defaults to @p (the nearest player) rather than @s: commands sent over the WebSocket have no entity identity, so @s cannot be resolved in some cases.',
       inputSchema: z
         .object({ target: selectorSchema().default('@p') })
         .strict(),
@@ -387,8 +387,8 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
         return ok(
           { ...outcomeToPayload(outcome), details },
           outcome.ok
-            ? `已取得 ${target} 的位置資料。`
-            : `查詢失敗：${outcome.statusMessage ?? '找不到目標'}${notInWorldHint(outcome)}`,
+            ? `Got position data for ${target}.`
+            : `Query failed: ${outcome.statusMessage ?? 'no target found'}${notInWorldHint(outcome)}`,
         );
       }),
   );
@@ -396,11 +396,11 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_summon',
     {
-      title: '生成生物或實體',
-      description: '在指定座標生成一個實體，可加名牌。position 留空則生在指令發起者位置。',
+      title: 'Summon a mob or entity',
+      description: 'Spawn one entity at a coordinate, optionally with a name tag. Leave position empty to spawn it where the command runs.',
       inputSchema: z
         .object({
-          entity: blockNameSchema().describe('實體 ID，例如 cow 或 minecraft:villager'),
+          entity: blockNameSchema().describe('Entity ID, for example cow or minecraft:villager'),
           position: coordinateSchema().nullable().default(null),
           nameTag: z.string().trim().min(1).max(64).nullable().default(null),
         })
@@ -420,14 +420,14 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_world_settings',
     {
-      title: '調整世界設定',
+      title: 'Change a world setting',
       description:
-        '一次改一項世界設定：time 設定時間（day/night/noon/midnight 或 tick 數）、weather 天氣、gamerule 遊戲規則、difficulty 難度。',
+        'Change one world setting at a time: time sets the time (day/night/noon/midnight or a tick count), weather the weather, gamerule a game rule, difficulty the difficulty.',
       inputSchema: z
         .object({
           setting: z.enum(['time', 'weather', 'gamerule', 'difficulty']),
-          value: z.string().trim().min(1).max(64).describe('time:day｜weather:clear｜difficulty:peaceful｜gamerule 的值'),
-          rule: z.string().trim().min(1).max(64).optional().describe('setting="gamerule" 時的規則名稱'),
+          value: z.string().trim().min(1).max(64).describe('time: day | weather: clear | difficulty: peaceful | the gamerule value'),
+          rule: z.string().trim().min(1).max(64).optional().describe('Rule name when setting="gamerule"'),
           durationSeconds: z.number().int().min(0).max(1_000_000).nullable().default(null),
         })
         .strict(),
@@ -441,14 +441,14 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
           commandLine = worldCommands.setTime(value);
         } else if (setting === 'weather') {
           const parsed = z.enum(['clear', 'rain', 'thunder']).safeParse(value);
-          if (!parsed.success) throw new Error('weather 只接受 clear、rain 或 thunder。');
+          if (!parsed.success) throw new Error('weather accepts only clear, rain or thunder.');
           commandLine = worldCommands.setWeather(parsed.data, durationSeconds);
         } else if (setting === 'difficulty') {
           const parsed = z.enum(['peaceful', 'easy', 'normal', 'hard']).safeParse(value);
-          if (!parsed.success) throw new Error('difficulty 只接受 peaceful、easy、normal 或 hard。');
+          if (!parsed.success) throw new Error('difficulty accepts only peaceful, easy, normal or hard.');
           commandLine = worldCommands.setDifficulty(parsed.data);
         } else {
-          if (rule === undefined) throw new Error('setting="gamerule" 需要提供 rule。');
+          if (rule === undefined) throw new Error('setting="gamerule" requires rule.');
           commandLine = worldCommands.setGameRule(rule, value);
         }
         const outcome = await service.run(commandLine);
@@ -459,29 +459,29 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_structure',
     {
-      title: '儲存或載入結構',
+      title: 'Save or load a structure',
       description:
-        '把一塊區域存成具名結構，或把已存的結構放回世界。這是把 AI 蓋好的東西保存、量產、帶到別的世界的官方途徑。' +
-        '\n\n**saveMode 要照使用者的意圖選，不要一律用同一個：**' +
-        '\n- `memory`（預設）＝這次連線內的暫存。AI 反覆修改同一棟建築時用這個：想留退路就存一版，' +
-        '改壞了 load 回來。關掉遊戲就消失，不會在硬碟累積檔案。' +
-        '\n- `disk` ＝**使用者明確表示要保留**時才用（「幫我記住這棟」「存起來下次還要用」）。' +
-        '它會寫成檔案存進遊戲的世界資料夾，關掉遊戲也還在——但那是真的在使用者硬碟上留東西，' +
-        '不要在他沒說要保留時擅自寫入。' +
-        '\n\n版本管理就是**取名字**：`castle_v1`、`castle_v2`。同名會直接覆蓋，改版本前先換名字。' +
-        '遊戲沒有「列出已存結構」的指令，所以存過什麼只能靠名字記——本次連線存過的名單可以問 mc_status。',
+        'Save a region as a named structure, or place a saved structure back into the world. This is the official way to keep what the AI built, mass-produce it, or take it to another world.' +
+        '\n\n**Choose saveMode by what the user wants; do not always use the same one:**' +
+        '\n- `memory` (default) = temporary storage for this connection. Use it while the AI keeps revising the same build: save a version to keep a way back, ' +
+        'and load it if a change goes wrong. It disappears when the game closes and leaves no files on disk.' +
+        '\n- `disk` = only when **the user explicitly says to keep it** ("remember this building", "save it so I can use it next time"). ' +
+        'It is written as a file into the game world folder and survives closing the game, which really leaves something on the user disk, ' +
+        'so do not write it when they did not ask to keep it.' +
+        '\n\nVersioning is **naming**: `castle_v1`, `castle_v2`. The same name overwrites without warning, so change the name before saving a new version. ' +
+        'The game has no command to list saved structures, so names are the only record; mc_status lists the ones saved during this connection.',
       inputSchema: z
         .object({
           action: z.enum(['save', 'load']),
-          name: z.string().trim().min(1).max(64).describe('版本就靠這個區分；同名會覆蓋'),
-          from: coordinateSchema().optional().describe('save 需要'),
-          to: coordinateSchema().optional().describe('save 需要'),
-          destination: coordinateSchema().optional().describe('load 需要'),
+          name: z.string().trim().min(1).max(64).describe('Versions are told apart by this; the same name overwrites'),
+          from: coordinateSchema().optional().describe('Required for save'),
+          to: coordinateSchema().optional().describe('Required for save'),
+          destination: coordinateSchema().optional().describe('Required for load'),
           includeEntities: z.boolean().default(false),
           saveMode: z
             .enum(['memory', 'disk'])
             .default('memory')
-            .describe('memory=暫存（預設）；disk=寫進硬碟，只在使用者明確說要保留時用'),
+            .describe('memory = temporary (default); disk = written to disk, only when the user explicitly says to keep it'),
         })
         .strict(),
       outputSchema: commandOutcomeSchema(),
@@ -492,7 +492,7 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
         let commandLine: string;
         if (action === 'save') {
           if (from === undefined || to === undefined) {
-            throw new Error('action="save" 需要 from 與 to。');
+            throw new Error('action="save" requires from and to.');
           }
           commandLine = worldCommands.saveStructure(
             name,
@@ -502,7 +502,7 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
             saveMode,
           );
         } else {
-          if (destination === undefined) throw new Error('action="load" 需要 destination。');
+          if (destination === undefined) throw new Error('action="load" requires destination.');
           commandLine = worldCommands.loadStructure(name, toCoordinate(destination));
         }
         const outcome = await service.run(commandLine);
@@ -513,8 +513,8 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
         const note =
           action === 'save'
             ? saveMode === 'disk'
-              ? '（已寫入遊戲世界資料夾，關掉遊戲仍在）'
-              : '（暫存於記憶體，關掉遊戲就消失）'
+              ? ' (written to the game world folder; it stays after the game closes)'
+              : ' (kept in memory; it disappears when the game closes)'
             : '';
         return ok(outcomeToPayload(outcome), `${summarizeOutcome(outcome)}${note}`);
       }),
@@ -523,9 +523,9 @@ export function registerWorldTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_ticking_area',
     {
-      title: '新增常載區域',
+      title: 'Add a ticking area',
       description:
-        '把一塊區域設為常載，讓玩家離開後那裡的機制仍會運作。Agent 要在遠處自動工作時需要這個。',
+        'Keep a region loaded so its mechanisms keep running after the player leaves. Needed when the Agent works on its own far away.',
       inputSchema: z
         .object({
           from: coordinateSchema(),

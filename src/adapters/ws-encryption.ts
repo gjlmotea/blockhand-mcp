@@ -80,7 +80,7 @@ export function createEncryptionOffer(): EncryptionOffer {
 function parseClientPublicKey(base64: string): KeyObject {
   const trimmed = base64.trim();
   if (trimmed === '') {
-    throw new MinecraftBridgeError('encryption-failed', '遊戲沒有回傳公鑰，無法完成加密握手。');
+    throw new MinecraftBridgeError('encryption-failed', 'The game returned no public key, so the encryption handshake cannot complete.');
   }
 
   try {
@@ -92,7 +92,7 @@ function parseClientPublicKey(base64: string): KeyObject {
   } catch (error: unknown) {
     throw new MinecraftBridgeError(
       'encryption-failed',
-      `無法解析遊戲回傳的公鑰：${error instanceof Error ? error.message : String(error)}`,
+      `Could not parse the public key returned by the game: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 }

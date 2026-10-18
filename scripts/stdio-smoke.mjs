@@ -66,10 +66,10 @@ async function waitForOutput(processState, pattern, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
   while (!pattern.test(processState.stderr())) {
     if (processState.child.exitCode !== null || processState.child.signalCode !== null) {
-      throw new Error(`MCP server 在出現 ${String(pattern)} 前退出：${processState.stderr()}`);
+      throw new Error(`MCP server exited before printing ${String(pattern)}: ${processState.stderr()}`);
     }
     if (Date.now() >= deadline) {
-      throw new Error(`等待 MCP server 輸出 ${String(pattern)} 逾時：${processState.stderr()}`);
+      throw new Error(`Timed out waiting for the MCP server to print ${String(pattern)}: ${processState.stderr()}`);
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
@@ -86,7 +86,7 @@ async function waitForExit(child, timeoutMs = 5000) {
     };
     const timer = setTimeout(() => {
       child.off('exit', onExit);
-      reject(new Error('等待 MCP server 結束逾時'));
+      reject(new Error('Timed out waiting for the MCP server to exit'));
     }, timeoutMs);
     child.once('exit', onExit);
   });
@@ -112,7 +112,7 @@ async function verifyStdinCleanup() {
     await waitForOutput(processState, /info: ready/);
     processState.child.stdin.end();
     const exit = await waitForExit(processState.child, 3000);
-    assert.equal(exit.code, 0, `STDIN EOF 後應正常結束：${processState.stderr()}`);
+    assert.equal(exit.code, 0, `should exit cleanly after STDIN EOF: ${processState.stderr()}`);
     assert.match(processState.stderr(), /shutting down.*stdin-/);
     await assertPortReusable(lifecyclePort);
   } finally {
@@ -127,7 +127,7 @@ async function verifyEarlyStdinCleanup() {
     // 模擬 MCP Host 在 initialize／ready 前就取消啟動。
     processState.child.stdin.end();
     const exit = await waitForExit(processState.child, 3000);
-    assert.equal(exit.code, 0, `早期 STDIN EOF 後應正常結束：${processState.stderr()}`);
+    assert.equal(exit.code, 0, `should exit cleanly after an early STDIN EOF: ${processState.stderr()}`);
     assert.match(processState.stderr(), /shutting down.*stdin-/);
     await assertPortReusable(lifecyclePort);
   } finally {
@@ -142,7 +142,7 @@ async function verifyOccupiedPortFailure() {
   });
   try {
     const exit = await waitForExit(processState.child, 3000);
-    assert.equal(exit.code, 1, `占埠時應明確失敗：${processState.stderr()}`);
+    assert.equal(exit.code, 1, `should fail clearly when the port is taken: ${processState.stderr()}`);
     assert.match(processState.stderr(), /EADDRINUSE/);
   } finally {
     await stopChild(processState.child);
@@ -172,7 +172,7 @@ async function verifyOccupiedPortFallback() {
     assert.equal(status.isError, false);
     assert.equal(status.structuredContent.listening, true);
     fallbackPort = status.structuredContent.port;
-    assert.notEqual(fallbackPort, reservation.port, '占埠時應自動改用其他空閒埠');
+    assert.notEqual(fallbackPort, reservation.port, 'should switch to another free port when the port is taken');
     assert.equal(
       status.structuredContent.connectCommand,
       `/connect 127.0.0.1:${String(fallbackPort)}`,
@@ -239,7 +239,7 @@ try {
   const { tools } = await client.listTools();
   const names = tools.map((tool) => tool.name).sort();
   toolCount = names.length;
-  assert.equal(names.length, 44, `預期 44 個工具，實際 ${names.length}`);
+  assert.equal(names.length, 44, `expected 44 tools, got ${names.length}`);
   for (const required of [
     'mc_status',
     'mc_undo',
@@ -250,12 +250,12 @@ try {
     'mc_events_poll',
     'mc_run_command',
   ]) {
-    assert.ok(names.includes(required), `缺少工具 ${required}`);
+    assert.ok(names.includes(required), `missing tool ${required}`);
   }
 
   // 每個工具都必須有標題與描述，否則 MCP Host 無從判斷該不該用。
   for (const tool of tools) {
-    assert.ok((tool.description ?? '').length > 10, `${tool.name} 缺少足夠描述`);
+    assert.ok((tool.description ?? '').length > 10, `${tool.name} lacks an adequate description`);
   }
 
   const { resources } = await client.listResources();
@@ -266,8 +266,8 @@ try {
 
   const status = await client.callTool({ name: 'mc_status', arguments: {} });
   assert.equal(status.isError, false);
-  assert.equal(status.structuredContent.listening, true, '橋接應該已在監聽');
-  assert.equal(status.structuredContent.connected, false, 'smoke 不開遊戲，應為未連線');
+  assert.equal(status.structuredContent.listening, true, 'the bridge should already be listening');
+  assert.equal(status.structuredContent.connected, false, 'the smoke runs without the game, so it should not be connected');
   assert.equal(status.structuredContent.connectCommand, `/connect 127.0.0.1:${port}`);
 
   // 未連線時的錯誤必須帶著可照做的指示。
@@ -276,7 +276,7 @@ try {
     arguments: { position: { x: 0, y: 64, z: 0 }, block: 'stone' },
   });
   assert.equal(blocked.isError, true);
-  assert.ok(blocked.content[0].text.includes('/connect'), '錯誤訊息應包含連線指示');
+  assert.ok(blocked.content[0].text.includes('/connect'), 'the error should include connection instructions');
 
   // 純計算的預覽不需要連線也要能算。
   const preview = await client.callTool({
@@ -290,7 +290,7 @@ try {
   assert.ok(preview.structuredContent.blockCount > 500);
   assert.ok(
     preview.structuredContent.fillBatches < preview.structuredContent.blockCount,
-    '合併後的批次數必須少於方塊數',
+    'merged batches must be fewer than blocks',
   );
 
   // 政策閘門在沒有遊戲時也要生效。
@@ -313,5 +313,5 @@ await verifyOccupiedPortFallback();
 await verifyOccupiedPortFailure();
 await verifyDirectDistCompatibility();
 process.stdout.write(
-  `Minecraft Education MCP stdio/lifecycle smoke passed（${String(toolCount)} tools）。\n`,
+  `Minecraft Education MCP stdio/lifecycle smoke passed (${String(toolCount)} tools).\n`,
 );

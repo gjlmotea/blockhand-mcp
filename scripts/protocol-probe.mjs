@@ -25,18 +25,18 @@ const PROBES = [
 
 const server = new WebSocketServer({ host: '127.0.0.1', port: PORT });
 
-process.stdout.write(`探針監聽 127.0.0.1:${PORT}\n請在遊戲聊天列輸入：/connect 127.0.0.1:${PORT}\n\n`);
+process.stdout.write(`Probe listening on 127.0.0.1:${PORT}\nType this into the game chat: /connect 127.0.0.1:${PORT}\n\n`);
 
 const waitMs = Number.parseInt(process.env.PROBE_WAIT_SECONDS ?? '180', 10) * 1000;
 const timeout = setTimeout(() => {
-  process.stdout.write('\n逾時：沒有任何連線進來。\n');
+  process.stdout.write('\nTimed out: no connection came in.\n');
   server.close();
   process.exit(1);
 }, waitMs);
 
 server.on('connection', async (socket) => {
   clearTimeout(timeout);
-  process.stdout.write('=== 已連線 ===\n\n');
+  process.stdout.write('=== Connected ===\n\n');
 
   const seen = [];
   socket.on('message', (data) => {
@@ -81,7 +81,7 @@ server.on('connection', async (socket) => {
   );
   await new Promise((resolve) => setTimeout(resolve, 3000));
 
-  process.stdout.write(`\n=== 共收到 ${seen.length} 個封包 ===\n`);
+  process.stdout.write(`\n=== Received ${seen.length} packets in total ===\n`);
   socket.close();
   server.close();
   process.exit(0);

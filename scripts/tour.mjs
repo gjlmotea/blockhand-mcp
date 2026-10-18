@@ -24,7 +24,7 @@ const arg = (k, d) => { const i = process.argv.indexOf(k); return i < 0 ? d : pr
 const has = k => process.argv.includes(k);
 const specPath = arg('--spec');
 const outDir = resolve(arg('--out', './tour-out'));
-if (!specPath) { process.stderr.write('用法：node scripts/tour.mjs --spec <tour.json> --out <目錄>\n'); process.exit(2); }
+if (!specPath) { process.stderr.write('Usage: node scripts/tour.mjs --spec <tour.json> --out <dir>\n'); process.exit(2); }
 const spec = JSON.parse(readFileSync(specPath, 'utf8'));
 const shotsDir = join(outDir, 'shots');
 mkdirSync(shotsDir, { recursive: true });
@@ -63,8 +63,8 @@ for (const p of spec.paths ?? []) {
     hold: p.holdMs ?? 180, kind: 'path', path: p.id, fps: p.fps ?? 24,
   }));
 }
-log(`劇本：${spec.shots?.length ?? 0} 個定格機位 + ${spec.paths?.length ?? 0} 條運鏡，共 ${plan.length} 格`);
-if (has('--dry')) { writeFileSync(join(outDir, 'plan.json'), JSON.stringify(plan, null, 1)); log('--dry：只輸出 plan.json，未連線'); process.exit(0); }
+log(`Script: ${spec.shots?.length ?? 0} still shots + ${spec.paths?.length ?? 0} camera paths, ${plan.length} frames in total`);
+if (has('--dry')) { writeFileSync(join(outDir, 'plan.json'), JSON.stringify(plan, null, 1)); log('--dry: wrote plan.json only; not connected'); process.exit(0); }
 
 // ---- 連上遊戲 ----
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -84,7 +84,7 @@ const cmd = async line => { const r = await call('mc_run_command', { command: li
 
 const status = JSON.parse((await call('mc_status'))?.content?.[0]?.text ?? '{}');
 if (!status.connected) {
-  log(`遊戲尚未連上。請在聊天列輸入：${status.connectCommand ?? '/connect 127.0.0.1:19131'}`);
+  log(`The game is not connected yet. Type this in the chat: ${status.connectCommand ?? '/connect 127.0.0.1:19131'}`);
   await call('mc_await_connection', { timeoutSeconds: 180 });
 }
 
@@ -92,10 +92,10 @@ if (!status.connected) {
 for (const t of spec.ticking ?? []) await cmd(`tickingarea add ${Array.isArray(t.box)?t.box.join(' '):t.box} ${t.name}`);
 if ((spec.ticking ?? []).length) {
   const wait = spec.settleMs ?? 55000;
-  log(`掛了 ${spec.ticking.length} 個刷新區域，等 ${Math.round(wait / 1000)} 秒讓區塊載入…`);
+  log(`Added ${spec.ticking.length} ticking areas; waiting ${Math.round(wait / 1000)} seconds for chunks to load…`);
   await sleep(wait);
 }
-for (const line of spec.prelude ?? []) { try { await cmd(line); } catch (e) { log(`  prelude 跳過「${line}」：${e.message}`); } }
+for (const line of spec.prelude ?? []) { try { await cmd(line); } catch (e) { log(`  prelude skipped "${line}": ${e.message}`); } }
 
 // ---- 把遊戲叫到最前面，否則截到的是別的視窗 ----
 spawnSync('open', ['-a', spec.app ?? 'minecraft-edu']);
@@ -110,11 +110,11 @@ for (const p of plan) {
   await sleep(p.hold);
   shot(join(shotsDir, `${p.id}.png`));
   timings.push(Date.now() - a); n++;
-  if (n % 10 === 0 || n === plan.length) log(`  ${n}/${plan.length}  平均 ${Math.round(timings.reduce((s, v) => s + v, 0) / timings.length)} ms/格`);
+  if (n % 10 === 0 || n === plan.length) log(`  ${n}/${plan.length}  average ${Math.round(timings.reduce((s, v) => s + v, 0) / timings.length)} ms/frame`);
 }
-for (const line of spec.postlude ?? []) { try { await cmd(line); } catch (e) { log(`  postlude 跳過「${line}」：${e.message}`); } }
+for (const line of spec.postlude ?? []) { try { await cmd(line); } catch (e) { log(`  postlude skipped "${line}": ${e.message}`); } }
 for (const t of spec.ticking ?? []) await cmd(`tickingarea remove ${t.name}`);
-log(`拍完 ${n} 格，耗時 ${Math.round((Date.now() - t0) / 1000)} 秒`);
+log(`Captured ${n} frames in ${Math.round((Date.now() - t0) / 1000)} seconds`);
 
 // ---- 運鏡序列接成影片；minterpolate 把稀疏的格補成順的動態 ----
 if (!has('--no-video')) for (const p of spec.paths ?? []) {
@@ -124,8 +124,8 @@ if (!has('--no-video')) for (const p of spec.paths ?? []) {
   const r = spawnSync('/opt/homebrew/bin/ffmpeg', ['-y', '-framerate', String(fps), '-i', src,
     '-vf', `minterpolate=fps=60:mi_mode=mci:mc_mode=aobmc:vsbmc=1,scale=2560:-2:flags=lanczos`,
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', mp4], { encoding: 'utf8' });
-  log(r.status === 0 ? `  影片 ${mp4}` : `  ffmpeg 失敗：${(r.stderr ?? '').split('\n').slice(-4).join(' ')}`);
+  log(r.status === 0 ? `  video ${mp4}` : `  ffmpeg failed: ${(r.stderr ?? '').split('\n').slice(-4).join(' ')}`);
 }
 writeFileSync(join(outDir, 'timings.json'), JSON.stringify({ plan: plan.length, timings }, null, 1));
 await client.close();
-log('完成。');
+log('Done.');

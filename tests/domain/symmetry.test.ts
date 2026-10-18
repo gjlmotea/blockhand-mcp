@@ -32,8 +32,8 @@ describe('assertStructureFits', () => {
   });
 
   it('超過上限時明講是哪一軸超標，而不是只說太大', () => {
-    expect(() => assertStructureFits(normalizeRegion(v(0, 0, 0), v(64, 0, 0)))).toThrow(/超標軸 x/u);
-    expect(() => assertStructureFits(normalizeRegion(v(0, 0, 0), v(0, 0, 999)))).toThrow(/超標軸 z/u);
+    expect(() => assertStructureFits(normalizeRegion(v(0, 0, 0), v(64, 0, 0)))).toThrow(/axes over the limit: x\b/u);
+    expect(() => assertStructureFits(normalizeRegion(v(0, 0, 0), v(0, 0, 999)))).toThrow(/axes over the limit: z\b/u);
   });
 });
 

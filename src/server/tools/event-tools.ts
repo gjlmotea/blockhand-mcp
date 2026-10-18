@@ -20,9 +20,9 @@ export function registerEventTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_events_catalog',
     {
-      title: '列出可訂閱的事件名稱',
+      title: 'List subscribable event names',
       description:
-        '回傳已知可用的事件名稱。Mojang 沒有正式文件化這份清單，所以訂閱清單外的名稱是允許的，只會被標記為未驗證。無副作用。',
+        'Return the event names known to work. Mojang does not formally document this list, so subscribing to a name outside it is allowed; it is just marked unverified. No side effects.',
       inputSchema: z.object({}).strict(),
       outputSchema: z.object({ eventNames: z.array(z.string()) }).strict(),
       annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
@@ -30,17 +30,17 @@ export function registerEventTools(server: McpServer, service: BlockHandService)
     async () =>
       guard(async () => {
         const eventNames = [...service.knownEventNames()];
-        return ok({ eventNames }, `已知 ${String(eventNames.length)} 種事件可訂閱。`);
+        return ok({ eventNames }, `${String(eventNames.length)} known events can be subscribed to.`);
       }),
   );
 
   server.registerTool(
     'mc_events_subscribe',
     {
-      title: '訂閱遊戲事件',
+      title: 'Subscribe to game events',
       description:
-        '開始接收某類遊戲事件（例如 PlayerMessage 聊天、BlockPlaced 放置方塊、PlayerTravelled 移動）。' +
-        '事件會存進環形緩衝，之後用 mc_events_poll 取出。這是讓 AI「感知」玩家在做什麼的方式。重新連線後會自動重新訂閱。',
+        'Start receiving a kind of game event (for example PlayerMessage for chat, BlockPlaced for placed blocks, PlayerTravelled for movement). ' +
+        'Events go into a ring buffer; read them later with mc_events_poll. This is how the AI perceives what the player is doing. Subscriptions are renewed automatically after a reconnect.',
       inputSchema: z.object({ eventName: eventNameSchema }).strict(),
       outputSchema: z
         .object({ eventName: z.string(), verified: z.boolean(), subscribedEvents: z.array(z.string()) })
@@ -54,8 +54,8 @@ export function registerEventTools(server: McpServer, service: BlockHandService)
         return ok(
           { eventName, verified: result.verified, subscribedEvents: [...status.subscribedEvents] },
           result.verified
-            ? `已訂閱 ${eventName}。`
-            : `已送出 ${eventName} 的訂閱請求，但它不在已知清單內；若始終收不到事件，請確認名稱拼寫。`,
+            ? `Subscribed to ${eventName}.`
+            : `Sent a subscription request for ${eventName}, but it is not on the known list; if no events ever arrive, check the spelling.`,
         );
       }),
   );
@@ -63,8 +63,8 @@ export function registerEventTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_events_unsubscribe',
     {
-      title: '取消訂閱遊戲事件',
-      description: '停止接收某類事件。已經收進緩衝的事件不會被清除。',
+      title: 'Unsubscribe from game events',
+      description: 'Stop receiving a kind of event. Events already in the buffer are kept.',
       inputSchema: z.object({ eventName: eventNameSchema }).strict(),
       outputSchema: z.object({ eventName: z.string(), subscribedEvents: z.array(z.string()) }).strict(),
       annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false, openWorldHint: false },
@@ -75,7 +75,7 @@ export function registerEventTools(server: McpServer, service: BlockHandService)
         const status = service.status();
         return ok(
           { eventName, subscribedEvents: [...status.subscribedEvents] },
-          `已取消訂閱 ${eventName}。`,
+          `Unsubscribed from ${eventName}.`,
         );
       }),
   );
@@ -83,15 +83,15 @@ export function registerEventTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_events_poll',
     {
-      title: '讀取已收到的事件',
+      title: 'Read received events',
       description:
-        '取出游標之後的事件。第一次用 afterCursor=0，之後帶回上次回傳的 nextCursor 就能連續讀。' +
-        'dropped 大於 0 代表緩衝環繞、有事件永遠讀不到了，該提高輪詢頻率。無副作用。',
+        'Return the events after a cursor. Use afterCursor=0 the first time, then pass back the nextCursor from the previous call to keep reading. ' +
+        'dropped greater than 0 means the buffer wrapped around and some events are lost for good; poll more often. No side effects.',
       inputSchema: z
         .object({
           afterCursor: z.number().int().min(0).default(0),
           limit: z.number().int().min(1).max(200).default(50),
-          eventName: eventNameSchema.nullable().default(null).describe('只取這一種事件'),
+          eventName: eventNameSchema.nullable().default(null).describe('Only return this kind of event'),
         })
         .strict(),
       outputSchema: z
@@ -120,8 +120,8 @@ export function registerEventTools(server: McpServer, service: BlockHandService)
         return ok(
           payload,
           page.dropped > 0
-            ? `取得 ${String(page.events.length)} 筆事件；另有 ${String(page.dropped)} 筆因緩衝溢出而遺失。`
-            : `取得 ${String(page.events.length)} 筆事件。`,
+            ? `Got ${String(page.events.length)} events; another ${String(page.dropped)} were lost to buffer overflow.`
+            : `Got ${String(page.events.length)} events.`,
         );
       }),
   );

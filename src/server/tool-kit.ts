@@ -90,24 +90,24 @@ export function notInWorldHint(outcome: CommandOutcome): string {
   if (outcome.ok || outcome.statusMessage === null) return '';
   const verb = UNKNOWN_COMMAND.exec(outcome.statusMessage)?.[1]?.toLowerCase();
   if (verb === undefined || !BUILT_IN_VERBS.has(verb)) return '';
-  return `（${verb} 是內建指令卻被當成不認得：遊戲多半不在世界裡，例如回到主選單或世界清單，或世界沒開作弊。先截圖確認畫面。）`;
+  return ` (${verb} is a built-in command but the game did not recognize it: the game is most likely not in a world, for example back at the main menu or the world list, or the world does not have cheats on. Take a screenshot to check first.)`;
 }
 
 export function summarizeOutcome(outcome: CommandOutcome): string {
-  const undoNote=outcome.undo ? ` ${outcome.undo.reason ?? ''}（備份 ${outcome.undo.storedBlocks} 格／${outcome.undo.snapshotCount} 區）` : '';
+  const undoNote=outcome.undo ? ` ${outcome.undo.reason ?? ''} (backed up ${outcome.undo.storedBlocks} blocks / ${outcome.undo.snapshotCount} regions)` : '';
   if (outcome.ok) {
-    return (outcome.statusMessage ?? `已執行：${outcome.commandLine}`)+undoNote;
+    return (outcome.statusMessage ?? `Done: ${outcome.commandLine}`)+undoNote;
   }
-  return `失敗：${outcome.commandLine}｜${outcome.statusMessage ?? '遊戲沒有回報原因'}${notInWorldHint(outcome)}`+undoNote;
+  return `Failed: ${outcome.commandLine} | ${outcome.statusMessage ?? 'the game gave no reason'}${notInWorldHint(outcome)}`+undoNote;
 }
 
 export function summarizeBatch(batch: BatchOutcome, label: string): string {
-  const undoNote=batch.undo ? ` ${batch.undo.reason ?? ''}（備份 ${batch.undo.storedBlocks} 格／${batch.undo.snapshotCount} 區）` : '';
+  const undoNote=batch.undo ? ` ${batch.undo.reason ?? ''} (backed up ${batch.undo.storedBlocks} blocks / ${batch.undo.snapshotCount} regions)` : '';
   if (batch.ok) {
-    return `${label}：${String(batch.succeeded)} 條指令全部成功，用時 ${String(batch.elapsedMs)} ms。`+undoNote;
+    return `${label}: all ${String(batch.succeeded)} commands succeeded in ${String(batch.elapsedMs)} ms.`+undoNote;
   }
-  const reason = (batch.firstFailure?.statusMessage ?? '遊戲沒有回報原因') + (batch.firstFailure ? notInWorldHint(batch.firstFailure) : '');
-  return `${label}：${String(batch.succeeded)}/${String(batch.issued)} 成功，${String(batch.failed)} 失敗。首個失敗：${batch.firstFailure?.commandLine ?? '未知'}｜${reason}`+undoNote;
+  const reason = (batch.firstFailure?.statusMessage ?? 'the game gave no reason') + (batch.firstFailure ? notInWorldHint(batch.firstFailure) : '');
+  return `${label}: ${String(batch.succeeded)}/${String(batch.issued)} succeeded, ${String(batch.failed)} failed. First failure: ${batch.firstFailure?.commandLine ?? 'unknown'} | ${reason}`+undoNote;
 }
 
 /** zod 已經套用 mode 預設值，這裡只是把形狀轉成領域型別。 */

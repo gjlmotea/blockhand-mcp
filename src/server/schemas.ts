@@ -39,7 +39,7 @@ export const coordinateSchema = () =>
       mode: z
         .enum(COORDINATE_MODES)
         .default('absolute')
-        .describe('absolute=世界座標；relative=~ 相對發起者；local=^ 相對面向'),
+        .describe('absolute = world coordinates; relative = ~ relative to the command source; local = ^ relative to its facing'),
     })
     .strict();
 
@@ -53,13 +53,13 @@ export const vec3Schema = () =>
     .strict();
 
 export const blockNameSchema = () =>
-  z.string().trim().min(1).max(80).describe('方塊 ID，例如 stone 或 minecraft:oak_planks');
+  z.string().trim().min(1).max(80).describe('Block ID, for example stone or minecraft:oak_planks');
 
 export const blockStatesSchema = () =>
-  z.string().trim().min(2).max(200).describe('選用的方塊狀態，例如 ["stone_type":"granite"]');
+  z.string().trim().min(2).max(200).describe('Optional block states, for example ["stone_type":"granite"]');
 
 export const selectorSchema = () =>
-  z.string().trim().min(1).max(120).describe('目標選擇器（@a/@p/@s/@e/@r，可帶 []）或玩家名稱');
+  z.string().trim().min(1).max(120).describe('Target selector (@a/@p/@s/@e/@r, optionally with []) or a player name');
 
 export const agentDirectionSchema = () => z.enum(AGENT_DIRECTIONS);
 export const turnDirectionSchema = () => z.enum(TURN_DIRECTIONS);
@@ -121,15 +121,15 @@ export const connectionStatusSchema = () =>
       commandState: z.enum(['unknown', 'responsive', 'timed-out']).optional(),
       lastCommandResponseAt: z.string().nullable().optional(),
       lastCommandTimeoutAt: z.string().nullable().optional(),
-      inFlightCommands: z.number().optional().describe('已送進遊戲、還在等回覆的指令數；橋接一次只送一條'),
+      inFlightCommands: z.number().optional().describe('Commands sent to the game and still waiting for a reply; the bridge sends one at a time'),
       queuedCommands: z
         .number()
         .optional()
-        .describe('還沒送出、正在排隊的指令數；大於 0 代表卡在呼叫端的併發而不是遊戲'),
+        .describe('Commands queued and not yet sent; greater than 0 means the backlog comes from concurrent calls on the client side, not from the game'),
       undo: undoStatusSchema().optional(),
       savedStructures: z
         .array(z.object({ name: z.string(), saveMode: z.string() }).strict())
-        .describe('本次連線存過的結構；遊戲沒有列出結構的指令，所以只能由橋接自己記'),
+        .describe('Structures saved during this connection; the game has no command to list structures, so the bridge keeps its own record'),
     })
     .strict();
 
@@ -202,7 +202,7 @@ export const shapeSchema = () =>
           .min(0)
           .max(128)
           .default(0)
-          .describe('頂面半徑；0 是傳統圓錐，大於 0 就是圓錐台（煙囪、塔身、橋墩）'),
+          .describe('Top radius; 0 is a classic cone, greater than 0 makes a truncated cone (chimneys, tower bodies, bridge piers)'),
         axis: axisSchema().default('y'),
         hollow: z.boolean().default(false),
       })
@@ -215,16 +215,16 @@ export const shapeSchema = () =>
           .number()
           .min(1)
           .max(128)
-          .describe('底面中心到「邊」的距離，不是到頂點；底邊長 = 2×baseRadius+1'),
+          .describe('Distance from the base center to an edge, not to a corner; base side length = 2*baseRadius+1'),
         height: z.number().int().min(1).max(384),
         topRadius: z
           .number()
           .min(0)
           .max(128)
           .default(0)
-          .describe('頂面半徑；0 收成尖點，大於 0 就是角錐台（城堡塔身、神廟基座）'),
-        sides: z.number().int().min(3).max(12).default(4).describe('4 是傳統方底，3 三角錐，6 六角錐'),
-        rotation: z.number().min(-360).max(360).default(0).describe('底面繞 Y 軸轉幾度'),
+          .describe('Top radius; 0 ends in a point, greater than 0 makes a frustum (castle towers, temple bases)'),
+        sides: z.number().int().min(3).max(12).default(4).describe('4 is a classic square base, 3 a triangular pyramid, 6 a hexagonal pyramid'),
+        rotation: z.number().min(-360).max(360).default(0).describe('Degrees to rotate the base around the Y axis'),
         hollow: z.boolean().default(false),
       })
       .strict(),
@@ -234,7 +234,7 @@ export const shapeSchema = () =>
         center: vec3Schema(),
         radius: z.number().min(1).max(256),
         axis: axisSchema().default('y'),
-        hollow: z.boolean().default(false).describe('true 只畫圓環外框'),
+        hollow: z.boolean().default(false).describe('true draws only the outer ring'),
       })
       .strict(),
     z
@@ -264,9 +264,9 @@ export const shapeSchema = () =>
           .array(vec3Schema())
           .min(2)
           .max(64)
-          .describe('曲線會平滑通過每一個控制點，不是折線'),
+          .describe('The curve passes smoothly through every control point; it is not a polyline'),
         thickness: z.number().int().min(1).max(7).default(1),
-        closed: z.boolean().default(false).describe('true 時首尾相接成封閉迴圈'),
+        closed: z.boolean().default(false).describe('When true, the ends join into a closed loop'),
       })
       .strict(),
     z
@@ -278,15 +278,15 @@ export const shapeSchema = () =>
           .array(
             z
               .object({
-                along: z.number().int().describe('沿軸位置，相對 center'),
-                radius: z.number().min(0).max(128).describe('該高度的半徑'),
+                along: z.number().int().describe('Position along the axis, relative to center'),
+                radius: z.number().min(0).max(128).describe('Radius at that position'),
               })
               .strict(),
           )
           .min(2)
           .max(64)
-          .describe('側面輪廓；半徑在相鄰點之間線性內插，可蓋花瓶、塔樓、圓頂'),
-        hollow: z.boolean().default(false).describe('true 只留側面殼層'),
+          .describe('Side profile; the radius is linearly interpolated between neighboring points. Builds vases, turrets, domes'),
+        hollow: z.boolean().default(false).describe('true keeps only the side shell'),
       })
       .strict(),
     z
@@ -298,11 +298,11 @@ export const shapeSchema = () =>
           .number()
           .min(0.5)
           .max(64)
-          .describe('cylinder 的任意方向版；兩端是半球收尾'),
+          .describe('A cylinder in any direction; both ends are capped with hemispheres'),
         hollow: z
           .boolean()
           .default(false)
-          .describe('封閉殼層，兩端的半球蓋也算殼，所以不是通的管子'),
+          .describe('A closed shell: the hemispherical end caps are part of the shell, so it is not an open pipe'),
       })
       .strict(),
     z
@@ -310,45 +310,45 @@ export const shapeSchema = () =>
         kind: z.literal('wedge'),
         from: vec3Schema(),
         to: vec3Schema(),
-        rise: axisSchema().default('y').describe('高度方向'),
+        rise: axisSchema().default('y').describe('Height direction'),
         run: axisSchema()
           .default('x')
-          .describe('斜面下降的方向，必須與 rise 不同軸；起點端滿高、終點端剩一格'),
-        reversed: z.boolean().default(false).describe('true 改成沿 run 軸負向變矮'),
+          .describe('Direction the slope descends along; must be a different axis from rise. Full height at the start end, one block at the far end'),
+        reversed: z.boolean().default(false).describe('When true, it gets lower toward the negative run axis instead'),
         hollow: z.boolean().default(false),
       })
       .strict(),
     z
       .object({
         kind: z.literal('arch'),
-        center: vec3Schema().describe('起拱線中心，也就是兩隻拱腳連線的中點'),
-        radius: z.number().min(1).max(128).describe('拱內緣半徑；開口寬度 = 2×radius−1'),
-        thickness: z.number().min(1).max(64).default(1).describe('拱圈厚度'),
-        depth: z.number().int().min(1).max(256).default(1).describe('沿第三軸的進深'),
-        span: axisSchema().default('x').describe('拱跨越的方向'),
-        rise: axisSchema().default('y').describe('向上的方向，必須與 span 不同軸'),
+        center: vec3Schema().describe('Center of the springing line, the midpoint between the two arch feet'),
+        radius: z.number().min(1).max(128).describe('Inner radius of the arch; opening width = 2*radius-1'),
+        thickness: z.number().min(1).max(64).default(1).describe('Thickness of the arch ring'),
+        depth: z.number().int().min(1).max(256).default(1).describe('Depth along the third axis'),
+        span: axisSchema().default('x').describe('Direction the arch spans'),
+        rise: axisSchema().default('y').describe('Upward direction; must be a different axis from span'),
         legHeight: z
           .number()
           .int()
           .min(0)
           .max(256)
           .default(0)
-          .describe('起拱線以下的直柱高度；城門與橋拱要它，純半圓設 0'),
+          .describe('Height of the straight legs below the springing line; city gates and bridge arches need it, set 0 for a pure semicircle'),
       })
       .strict(),
     z
       .object({
         kind: z.literal('stairs'),
-        from: vec3Schema().describe('第一階踏面的起點角落：最低、最靠近起點、寬度方向座標最小那一格'),
-        direction: z.enum(STAIR_DIRECTIONS).describe('水平前進方向；階梯一律沿 Y 軸上升'),
+        from: vec3Schema().describe('Starting corner of the first tread: the lowest block, nearest the start, with the smallest coordinate across the width'),
+        direction: z.enum(STAIR_DIRECTIONS).describe('Horizontal direction of travel; stairs always rise along the Y axis'),
         steps: z.number().int().min(1).max(256),
-        width: z.number().int().min(1).max(64).default(1).describe('梯寬，往前進方向的左手邊展開'),
-        stepRise: z.number().int().min(1).max(8).default(1).describe('每階上升幾格'),
-        stepRun: z.number().int().min(1).max(8).default(1).describe('每階前進幾格（踏面深度）'),
+        width: z.number().int().min(1).max(64).default(1).describe('Stair width, extending to the left of the direction of travel'),
+        stepRise: z.number().int().min(1).max(8).default(1).describe('Blocks each step rises'),
+        stepRun: z.number().int().min(1).max(8).default(1).describe('Blocks each step advances (tread depth)'),
         solid: z
           .boolean()
           .default(false)
-          .describe('false 懸空踏板；true 每階往下補滿到起點高度，做成實心梯體'),
+          .describe('false gives floating treads; true fills each step down to the starting height for a solid staircase'),
       })
       .strict(),
     z
@@ -359,10 +359,10 @@ export const shapeSchema = () =>
           .number()
           .min(1)
           .max(128)
-          .describe('中心到「邊」的距離；邊數愈多愈接近同半徑的 cylinder'),
+          .describe('Distance from the center to an edge; the more sides, the closer it gets to a cylinder of the same radius'),
         height: z.number().int().min(1).max(384),
-        sides: z.number().int().min(3).max(12).default(6).describe('3 三角柱、6 六角塔、8 八角亭'),
-        rotation: z.number().min(-360).max(360).default(0).describe('繞軸旋轉幾度，用來對齊某一邊的朝向'),
+        sides: z.number().int().min(3).max(12).default(6).describe('3 for a triangular prism, 6 for a hexagonal tower, 8 for an octagonal pavilion'),
+        rotation: z.number().min(-360).max(360).default(0).describe('Degrees to rotate around the axis, to align one side with a direction'),
         axis: axisSchema().default('y'),
         hollow: z.boolean().default(false),
       })
@@ -374,28 +374,28 @@ export const shapeSchema = () =>
           .array(vec3Schema())
           .min(2)
           .max(32)
-          .describe('XZ 折線的轉折點，轉角不會被磨圓（curve 會）；Y 取第一點當牆基'),
+          .describe('Corner points of an XZ polyline; corners are not rounded (curve rounds them). The Y of the first point is the wall base'),
         height: z.number().int().min(1).max(384),
         thickness: z.number().int().min(1).max(32).default(1),
-        closed: z.boolean().default(false).describe('true 首尾相接，圍成一圈'),
-        battlement: z.boolean().default(false).describe('頂層做成城垛，沿路徑交替留空'),
-        merlonWidth: z.number().int().min(1).max(32).default(2).describe('城垛的垛與缺口各幾格'),
+        closed: z.boolean().default(false).describe('When true, the ends join to enclose a loop'),
+        battlement: z.boolean().default(false).describe('Make the top layer battlements, alternating gaps along the path'),
+        merlonWidth: z.number().int().min(1).max(32).default(2).describe('Width in blocks of each merlon and each gap'),
       })
       .strict(),
     z
       .object({
         kind: z.literal('ribbon'),
-        points: z.array(vec3Schema()).min(2).max(32).describe('XZ 折線；Y 取第一點當路面高度'),
-        width: z.number().min(1).max(64).default(3).describe('往兩側攤開的總寬'),
-        thickness: z.number().int().min(1).max(64).default(1).describe('往上疊幾層'),
+        points: z.array(vec3Schema()).min(2).max(32).describe('XZ polyline; the Y of the first point is the road surface height'),
+        width: z.number().min(1).max(64).default(3).describe('Total width spread to both sides'),
+        thickness: z.number().int().min(1).max(64).default(1).describe('Number of layers stacked upward'),
         closed: z.boolean().default(false),
       })
       .strict(),
     z
       .object({
         kind: z.literal('heightfield'),
-        from: vec3Schema().describe('地皮的一角；Y 是地基高度'),
-        to: vec3Schema().describe('地皮的對角'),
+        from: vec3Schema().describe('One corner of the plot; Y is the base height'),
+        to: vec3Schema().describe('The opposite corner of the plot'),
         corners: z
           .object({
             nw: z.number().min(0).max(384).default(1),
@@ -405,7 +405,7 @@ export const shapeSchema = () =>
           })
           .strict()
           .default({ nw: 1, ne: 1, sw: 1, se: 1 })
-          .describe('四角相對 from.y 的高度，中間雙線性內插。−X 是西、−Z 是北'),
+          .describe('Height of each corner relative to from.y, bilinearly interpolated in between. -X is west, -Z is north'),
         waves: z
           .object({
             amplitude: z.number().min(0).max(128),
@@ -414,31 +414,31 @@ export const shapeSchema = () =>
           .strict()
           .nullable()
           .default(null)
-          .describe('疊在四角內插之上的正弦起伏；不需要就給 null'),
+          .describe('Sine waves added on top of the corner interpolation; pass null if not needed'),
         solid: z
           .boolean()
           .default(true)
-          .describe('true 從 from.y 填實到地表，false 只鋪地表那一層皮'),
+          .describe('true fills solid from from.y up to the surface; false lays only the surface layer'),
       })
       .strict(),
     z
       .object({
         kind: z.literal('spiralStairs'),
-        center: vec3Schema().describe('螺旋軸的底部中心'),
-        radius: z.number().min(1).max(128).describe('踏面外半徑'),
-        innerRadius: z.number().min(0).max(128).default(0).describe('中間留洞的半徑；0 是實心到軸'),
+        center: vec3Schema().describe('Bottom center of the spiral axis'),
+        radius: z.number().min(1).max(128).describe('Outer radius of the treads'),
+        innerRadius: z.number().min(0).max(128).default(0).describe('Radius of the hole in the middle; 0 is solid to the axis'),
         height: z.number().int().min(1).max(384),
-        turns: z.number().min(0.25).max(64).describe('總共繞幾圈'),
-        clockwise: z.boolean().default(true).describe('由上往下看的旋轉方向'),
-        stepRise: z.number().int().min(1).max(8).default(1).describe('每階上升幾格'),
+        turns: z.number().min(0.25).max(64).describe('Total number of turns'),
+        clockwise: z.boolean().default(true).describe('Direction of rotation seen from above'),
+        stepRise: z.number().int().min(1).max(8).default(1).describe('Blocks each step rises'),
       })
       .strict(),
     z
       .object({
         kind: z.literal('cross'),
         center: vec3Schema(),
-        radius: z.number().min(1).max(128).describe('中心到臂端的距離'),
-        armWidth: z.number().int().min(1).max(64).default(1).describe('臂寬（格）'),
+        radius: z.number().min(1).max(128).describe('Distance from the center to the end of an arm'),
+        armWidth: z.number().int().min(1).max(64).default(1).describe('Arm width in blocks'),
         height: z.number().int().min(1).max(384),
         axis: axisSchema().default('y'),
         hollow: z.boolean().default(false),
@@ -448,9 +448,9 @@ export const shapeSchema = () =>
       .object({
         kind: z.literal('star'),
         center: vec3Schema(),
-        points: z.number().int().min(3).max(12).default(5).describe('幾角星'),
-        outerRadius: z.number().min(2).max(128).describe('星芒尖端的半徑'),
-        innerRadius: z.number().min(1).max(128).describe('凹處的半徑，必須小於 outerRadius'),
+        points: z.number().int().min(3).max(12).default(5).describe('Number of star points'),
+        outerRadius: z.number().min(2).max(128).describe('Radius at the star tips'),
+        innerRadius: z.number().min(1).max(128).describe('Radius at the inner corners; must be less than outerRadius'),
         height: z.number().int().min(1).max(384).default(1),
         rotation: z.number().min(-360).max(360).default(0),
         axis: axisSchema().default('y'),
@@ -460,18 +460,18 @@ export const shapeSchema = () =>
     z
       .object({
         kind: z.literal('roof'),
-        from: vec3Schema().describe('屋頂底面的一角；Y 是屋簷高度'),
-        to: vec3Schema().describe('屋頂底面的對角'),
-        height: z.number().int().min(1).max(384).describe('從屋簷到屋脊的高度'),
+        from: vec3Schema().describe('One corner of the roof base; Y is the eave height'),
+        to: vec3Schema().describe('The opposite corner of the roof base'),
+        height: z.number().int().min(1).max(384).describe('Height from the eaves to the ridge'),
         style: z
           .enum(ROOF_STYLES)
           .default('gable')
-          .describe('gable 人字（兩坡），hip 四坡（四面都落下）'),
+          .describe('gable has two slopes; hip has four (it slopes down on all four sides)'),
         ridgeAxis: z
           .enum(['x', 'z'])
           .default('x')
-          .describe('屋脊「延伸」的方向，不是坡面朝向的方向；這兩個講法差 90 度'),
-        hollow: z.boolean().default(false).describe('true 只留屋面殼層，不填實內部'),
+          .describe('The direction the ridge runs along, not the direction a slope faces; the two differ by 90 degrees'),
+        hollow: z.boolean().default(false).describe('true keeps only the roof shell and leaves the inside empty'),
       })
       .strict(),
   ]);
@@ -504,7 +504,7 @@ export const agentProgramStepSchema = () =>
     z
       .object({
         action: z.literal('collect'),
-        item: blockNameSchema().nullable().default(null).describe('null 代表收集全部'),
+        item: blockNameSchema().nullable().default(null).describe('null collects everything'),
       })
       .strict(),
     z

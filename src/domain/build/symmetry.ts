@@ -59,8 +59,8 @@ export function assertStructureFits(region: Region): void {
   if (over.length > 0) {
     throw new MinecraftBridgeError(
       'shape-too-large',
-      `區域超過 structure 指令上限（x/y/z 各 ${String(MAX_STRUCTURE_SPAN.x)}/${String(MAX_STRUCTURE_SPAN.y)}/${String(MAX_STRUCTURE_SPAN.z)}）：` +
-        `超標軸 ${over.join('、')}，實際 ${String(size.x)}×${String(size.y)}×${String(size.z)}。`,
+      `The region is over the structure command limit (x/y/z ${String(MAX_STRUCTURE_SPAN.x)}/${String(MAX_STRUCTURE_SPAN.y)}/${String(MAX_STRUCTURE_SPAN.z)}): ` +
+        `axes over the limit: ${over.join(', ')}; actual size ${String(size.x)}x${String(size.y)}x${String(size.z)}.`,
     );
   }
 }
@@ -72,12 +72,12 @@ export function assertStructureFits(region: Region): void {
  */
 export function subdivideRegion(region: Region, cellsPerAxis: number): Cell[] {
   if (!Number.isInteger(cellsPerAxis) || cellsPerAxis < 1) {
-    throw new MinecraftBridgeError('invalid-shape', '細分數必須是 1 以上的整數。');
+    throw new MinecraftBridgeError('invalid-shape', 'cellsPerAxis must be an integer of at least 1.');
   }
   if (cellsPerAxis > MAX_CELLS_PER_AXIS) {
     throw new MinecraftBridgeError(
       'shape-too-large',
-      `每軸細分上限 ${String(MAX_CELLS_PER_AXIS)}；再多會撞到 MCP host 逾時。`,
+      `cellsPerAxis can be at most ${String(MAX_CELLS_PER_AXIS)}; more would hit the MCP host timeout.`,
     );
   }
 
@@ -152,7 +152,7 @@ export interface SymmetrySummary {
 export function summarizeSymmetry(verdicts: readonly CellVerdict[]): SymmetrySummary {
   const total = verdicts.length;
   if (total === 0) {
-    throw new MinecraftBridgeError('invalid-shape', '沒有可比對的格子。');
+    throw new MinecraftBridgeError('invalid-shape', 'There are no cells to compare.');
   }
   const matched = verdicts.filter((verdict) => verdict.symmetric).length;
   return {

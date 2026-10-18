@@ -174,7 +174,7 @@ corepack pnpm run connect
 
 **連線指令固定是 `/connect 127.0.0.1:19131`**：同一台機器上所有 AI 對話（桌面版、CLI、IDE、多個 task）共用一個在背景執行的**中樞**，由它持有 19131 與唯一的遊戲連線；每個對話的 MCP 只是把請求轉給它。第一個需要它的對話會自動把中樞叫起來；每個開著的對話每分鐘向中樞報到一次，所以只要還有任何對話開著，19131 就一直有人接，中樞意外結束也會被開著的對話立刻重開。所有對話都關掉、遊戲也沒連著約 10 分鐘後，中樞才自己結束。換對話、換模型、重開 AI 工具都不會斷線，在遊戲裡打 `/reload all`、離開世界再進別的世界，正常載入時也不會斷線（回到主選單時連線還在，但指令都會回「不明的指令」）。只有重開 Minecraft，或中樞那端斷線（遊戲聊天列會出現「連線關閉」）才需要重新 `/connect`。
 
-**連上時聊天列會出現綠字「✔ 已連上 Claude」，之後不用再打 `/connect`**。正常的 `/reload all`、換世界不會斷線（卡在載入畫面太久時，保活探測連續三次沒回應會斷線，見下方）。
+**連上時聊天列會出現綠字「✔ 已連上 BlockHand」，之後不用再打 `/connect`**。這行字跟著遊戲語言：繁中、簡中或英文，其他語言用英文。正常的 `/reload all`、換世界不會斷線（卡在載入畫面太久時，保活探測連續三次沒回應會斷線，見下方）。
 已經連著時再打一次，遊戲不會重連、不顯示任何字，玩家容易以為卡住；實測（Education 1.26.32）接著打的字和指令都照常，聊天列不會失靈。
 遊戲不會為重打的 `/connect` 送任何事件給橋接（訂閱了 `SlashCommandExecuted`、`PlayerMessage`、`WorldLoaded`、`WorldUnloaded` 都收不到），
 所以連上通知、`mc_status`、`mc_await_connection` 與 server 說明都提醒 AI 不要再請玩家打 `/connect`。
@@ -509,7 +509,7 @@ BlockHand 的管線是：
 | `MINECRAFT_EDU_HUB_PORT` | `19132` | 中樞給 AI 對話連的本機控制埠，同時是「誰當中樞」的選舉鎖 |
 | `MINECRAFT_EDU_HUB_DIR` | `~/.blockhand` | 中樞狀態檔 `hub.json`（含只有本機使用者可讀的存取金鑰）與日誌 `hub.log` |
 | `MINECRAFT_EDU_HUB_IDLE_MS` | `600000` | 沒有對話報到或請求、且遊戲未連線超過這段時間，中樞自動結束；遊戲連著時永遠不會結束。開著的對話每 `min(60 秒, 此值/3)` 報到一次 |
-| `MINECRAFT_EDU_CONNECT_NOTICE` | 開 | 遊戲連上時在聊天列顯示「✔ 已連上 Claude」；`0` 關閉 |
+| `MINECRAFT_EDU_CONNECT_NOTICE` | 開 | 遊戲連上時在聊天列顯示「✔ 已連上 BlockHand」，語言跟著遊戲（先送一條唯讀的 `time query daytime` 判斷）；`0` 關閉 |
 | `MINECRAFT_EDU_WS_PORT_FALLBACK` | `1` | 優先埠被其他 MCP 任務占用時，由作業系統自動配一個空閒埠；設成 `0` 可要求占埠即失敗 |
 | `MINECRAFT_EDU_COMMAND_TIMEOUT_MS` | `10000` | 單一指令等待遊戲回應的逾時 |
 | `MINECRAFT_EDU_KEEPALIVE_INTERVAL_MS` | `30000` | 閒置時送出保活探測（`time query daytime`）的間隔。調小可更快發現真的斷線，代價是更常打擾遊戲。需連續 3 次探測都毫無回應才終止連線 |
@@ -556,6 +556,7 @@ src/
 ## 8. 已知限制
 
 - **世界必須開作弊**，否則遊戲會拒絕每一條指令。這是 Minecraft 的規則，不是 bug。
+- **給 AI 看的文字是英文**：工具描述、server instructions 與錯誤訊息都是英文；遊戲自己回的文字（`statusMessage`、`mc_read_block` 讀到的方塊名稱）維持遊戲語言。
 - **macOS 已完成真機 live 驗證（Claude Code 路徑）**：2026-08-25 在 macOS 上經 Claude Code 完成 `/connect`、大量讀寫（單一工作階段逾 45,000 方塊、含 `fill`／`setblock`／`testforblock`／`teleport`）與斷線重連全流程。**尚未**驗證的是「從 Finder 啟動 Codex Desktop」這條啟動路徑——GUI 啟動的 PATH 與環境變數繼承方式不同，仍需各自實測。
 - **Agent 是 Education Edition 專屬**，一般 Bedrock 版沒有這個功能。
 - **事件名稱與 `agent` 子指令 Mojang 沒有正式文件化**，來自公開觀察；遊戲改版可能改變行為。`mc_events_subscribe` 允許清單外的名稱，但會標記為未驗證。

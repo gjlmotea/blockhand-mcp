@@ -53,7 +53,7 @@ export const CLIENTS = Object.freeze({
       ...desired.transport.args,
     ],
     buildRemoveArguments: (name) => ['mcp', 'remove', name],
-    restartHint: '完全退出並重啟 Codex；同一台機器的桌面版、CLI 與 IDE 共用這份設定。',
+    restartHint: 'Quit Codex completely and start it again; the desktop app, CLI and IDE extension on this machine share this setting.',
   },
 
   claude: {
@@ -61,7 +61,7 @@ export const CLIENTS = Object.freeze({
     label: 'Claude Code',
     binary: 'claude',
     pathEnvironmentVariable: 'CLAUDE_CLI_PATH',
-    configHint: '~/.claude.json（user scope）',
+    configHint: '~/.claude.json, user scope',
     read: {
       kind: 'config-file',
       // claude mcp list 只有人類可讀輸出且不含 env，無法用來判斷相容性。
@@ -82,7 +82,7 @@ export const CLIENTS = Object.freeze({
     ],
     buildRemoveArguments: (name) => ['mcp', 'remove', name, '--scope', 'user'],
     restartHint:
-      '重新啟動 Claude Code session（CLI 重開、桌面版完全退出）。若要整班共用，改用專案根的 .mcp.json（--scope project）。',
+      'Restart your Claude Code session (reopen the CLI, or quit the desktop app completely). To share the server with a whole class, use a .mcp.json at the project root instead (--scope project).',
   },
 
   gemini: {
@@ -90,7 +90,7 @@ export const CLIENTS = Object.freeze({
     label: 'Gemini CLI',
     binary: 'gemini',
     pathEnvironmentVariable: 'GEMINI_CLI_PATH',
-    configHint: '~/.gemini/settings.json（user scope）',
+    configHint: '~/.gemini/settings.json, user scope',
     read: {
       kind: 'config-file',
       configPath: (home) => join(home, '.gemini', 'settings.json'),
@@ -110,7 +110,7 @@ export const CLIENTS = Object.freeze({
       ...environmentPairs(desired.transport.env, '--env'),
     ],
     buildRemoveArguments: (name) => ['mcp', 'remove', name, '--scope', 'user'],
-    restartHint: '重新啟動 Gemini CLI。注意它的預設 scope 是 project，本安裝器一律寫 user。',
+    restartHint: 'Restart Gemini CLI. Its default scope is project; this installer always writes user scope.',
   },
 
   grok: {
@@ -134,14 +134,14 @@ export const CLIENTS = Object.freeze({
       ...desired.transport.args,
     ],
     buildRemoveArguments: (name) => ['mcp', 'remove', name, '--scope', 'user'],
-    restartHint: '重新啟動 Grok CLI。',
+    restartHint: 'Restart Grok CLI.',
   },
 });
 
 export function resolveClient(id) {
   const client = CLIENTS[id];
   if (client === undefined) {
-    throw new Error(`不支援的 client：${String(id)}。可用：${CLIENT_IDS.join('、')}`);
+    throw new Error(`Unsupported client: ${String(id)}. Available: ${CLIENT_IDS.join(', ')}`);
   }
   return client;
 }

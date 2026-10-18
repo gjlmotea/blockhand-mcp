@@ -15,8 +15,8 @@ export function registerPlayerTools(server: McpServer, service: BlockHandService
   server.registerTool(
     'mc_teleport',
     {
-      title: '傳送玩家或實體',
-      description: '把選擇器指定的對象傳送到座標。target 預設 @s 是執行指令的玩家。',
+      title: 'Teleport a player or entity',
+      description: 'Teleport the targets of a selector to a coordinate. target defaults to @s, the player running the commands.',
       inputSchema: z
         .object({ target: selectorSchema().default('@s'), destination: coordinateSchema() })
         .strict(),
@@ -35,8 +35,8 @@ export function registerPlayerTools(server: McpServer, service: BlockHandService
   server.registerTool(
     'mc_give',
     {
-      title: '給予物品',
-      description: '給對象指定數量的物品。要讓 Agent 有東西可放，先 give 給玩家再交給 Agent。',
+      title: 'Give items',
+      description: 'Give a target a number of items. To give the Agent something to place, give it to the player first and then hand it to the Agent.',
       inputSchema: z
         .object({
           target: selectorSchema().default('@s'),
@@ -58,8 +58,8 @@ export function registerPlayerTools(server: McpServer, service: BlockHandService
   server.registerTool(
     'mc_gamemode',
     {
-      title: '切換遊戲模式',
-      description: '把對象切成 survival、creative、adventure 或 spectator。',
+      title: 'Change game mode',
+      description: 'Switch the target to survival, creative, adventure or spectator.',
       inputSchema: z
         .object({
           mode: z.enum(['survival', 'creative', 'adventure', 'spectator']),
@@ -79,13 +79,13 @@ export function registerPlayerTools(server: McpServer, service: BlockHandService
   server.registerTool(
     'mc_effect',
     {
-      title: '施加或清除狀態效果',
-      description: 'action="apply" 施加藥水效果，"clear" 清除全部效果。',
+      title: 'Apply or clear status effects',
+      description: 'action="apply" applies a potion effect; "clear" removes all effects.',
       inputSchema: z
         .object({
           action: z.enum(['apply', 'clear']).default('apply'),
           target: selectorSchema().default('@s'),
-          effect: blockNameSchema().optional().describe('apply 需要，例如 speed 或 night_vision'),
+          effect: blockNameSchema().optional().describe('Required for apply, for example speed or night_vision'),
           seconds: z.number().int().min(0).max(1_000_000).default(30),
           amplifier: z.number().int().min(0).max(255).default(0),
           hideParticles: z.boolean().default(false),
@@ -100,7 +100,7 @@ export function registerPlayerTools(server: McpServer, service: BlockHandService
           const cleared = await service.run(playerCommands.clearEffects(target));
           return ok(outcomeToPayload(cleared), summarizeOutcome(cleared));
         }
-        if (effect === undefined) throw new Error('action="apply" 需要提供 effect。');
+        if (effect === undefined) throw new Error('action="apply" requires effect.');
         const outcome = await service.run(
           playerCommands.effect(target, effect, seconds, amplifier, hideParticles),
         );
@@ -111,15 +111,15 @@ export function registerPlayerTools(server: McpServer, service: BlockHandService
   server.registerTool(
     'mc_player_action',
     {
-      title: '玩家雜項動作',
+      title: 'Miscellaneous player actions',
       description:
-        'kill 殺死對象、clear 清空背包（可指定單一物品）、xp 給經驗、ability 開關 worldbuilder／mayfly／mute 權限。',
+        'kill kills the target, clear empties the inventory (optionally one item only), xp gives experience, ability turns the worldbuilder / mayfly / mute abilities on or off.',
       inputSchema: z
         .object({
           action: z.enum(['kill', 'clear', 'xp', 'ability']),
           target: selectorSchema().default('@s'),
-          item: blockNameSchema().nullable().default(null).describe('clear 可選'),
-          amount: z.number().int().min(-100_000).max(100_000).default(1).describe('xp 需要'),
+          item: blockNameSchema().nullable().default(null).describe('Optional for clear'),
+          amount: z.number().int().min(-100_000).max(100_000).default(1).describe('Required for xp'),
           unit: z.enum(['levels', 'points']).default('points'),
           ability: z.enum(['worldbuilder', 'mayfly', 'mute']).optional(),
           enabled: z.boolean().default(true),
@@ -140,7 +140,7 @@ export function registerPlayerTools(server: McpServer, service: BlockHandService
                 : playerCommands.ability(
                     target,
                     (() => {
-                      if (ability === undefined) throw new Error('action="ability" 需要提供 ability。');
+                      if (ability === undefined) throw new Error('action="ability" requires ability.');
                       return ability;
                     })(),
                     enabled,
@@ -153,9 +153,9 @@ export function registerPlayerTools(server: McpServer, service: BlockHandService
   server.registerTool(
     'mc_message',
     {
-      title: '在遊戲內顯示訊息',
+      title: 'Show a message in the game',
       description:
-        'say 全體聊天、tell 私訊、title／subtitle／actionbar 在畫面上顯示大字。教學或回報進度時用這個跟玩家說話。',
+        'say posts to everyone in chat, tell sends a private message, title / subtitle / actionbar show large text on screen. Use it to talk to players while teaching or reporting progress.',
       inputSchema: z
         .object({
           channel: z.enum(['say', 'tell', 'title', 'subtitle', 'actionbar']).default('say'),
@@ -182,13 +182,13 @@ export function registerPlayerTools(server: McpServer, service: BlockHandService
   server.registerTool(
     'mc_feedback',
     {
-      title: '播放音效或粒子',
-      description: '播一個音效或在座標生成粒子效果，用來給玩家即時的感官回饋。',
+      title: 'Play a sound or particle',
+      description: 'Play a sound or spawn a particle effect at a coordinate, to give players immediate sensory feedback.',
       inputSchema: z
         .object({
           kind: z.enum(['sound', 'particle']),
-          id: blockNameSchema().describe('音效或粒子 ID，例如 random.levelup 或 minecraft:heart_particle'),
-          target: selectorSchema().default('@a').describe('kind="sound" 時的聽眾'),
+          id: blockNameSchema().describe('Sound or particle ID, for example random.levelup or minecraft:heart_particle'),
+          target: selectorSchema().default('@a').describe('Who hears it when kind="sound"'),
           position: coordinateSchema().nullable().default(null),
         })
         .strict(),
@@ -198,7 +198,7 @@ export function registerPlayerTools(server: McpServer, service: BlockHandService
     async ({ kind, id, target, position }) =>
       guard(async () => {
         if (kind === 'particle') {
-          if (position === null) throw new Error('kind="particle" 需要提供 position。');
+          if (position === null) throw new Error('kind="particle" requires position.');
           const particle = await service.run(chatCommands.particle(id, toCoordinate(position)));
           return ok(outcomeToPayload(particle), summarizeOutcome(particle));
         }

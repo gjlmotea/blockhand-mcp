@@ -50,13 +50,13 @@ describe('analyzeSymmetry：安全邊界', () => {
 
   it('備份暫存區失敗時中止，且絕不放置鏡像副本', async () => {
     const runner = fakeRunner([{ match: /structure save blockhand_sym_bak/u, ok: false, statusMessage: '區塊未載入' }]);
-    await expect(analyzeSymmetry(runner, baseRequest)).rejects.toThrow(/無法備份/u);
+    await expect(analyzeSymmetry(runner, baseRequest)).rejects.toThrow(/Could not back up/u);
     expect(runner.issued.some((command) => command.startsWith('structure load'))).toBe(false);
   });
 
   it('保存分析區失敗時中止，連備份都不做', async () => {
     const runner = fakeRunner([{ match: /structure save blockhand_sym_src/u, ok: false }]);
-    await expect(analyzeSymmetry(runner, baseRequest)).rejects.toThrow(/無法保存分析區/u);
+    await expect(analyzeSymmetry(runner, baseRequest)).rejects.toThrow(/Could not save the analyzed region/u);
     expect(runner.issued.some((command) => /blockhand_sym_bak/u.test(command))).toBe(false);
   });
 
@@ -132,7 +132,7 @@ describe('analyzeSymmetry：比對行為', () => {
     const runner = fakeRunner([]);
     await expect(
       analyzeSymmetry(runner, { ...baseRequest, to: v(200, 71, 7) }),
-    ).rejects.toThrow(/structure 指令上限/u);
+    ).rejects.toThrow(/structure command limit/u);
     expect(runner.issued).toHaveLength(0);
   });
 });

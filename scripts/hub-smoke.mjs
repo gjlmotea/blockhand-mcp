@@ -118,7 +118,7 @@ try {
     await new Promise((resolve) => squatter.close(resolve));
   }
 
-  console.log('Minecraft Education MCP shared-hub smoke passed（attach, share, keepalive restart, re-attach, idle exit, fallback）。');
+  console.log('Minecraft Education MCP shared-hub smoke passed (attach, share, keepalive restart, re-attach, idle exit, fallback).');
 } catch (error) {
   for (const [index, handle] of proxies.entries()) {
     process.stderr.write(`--- proxy ${index} stderr ---\n${handle.stderr()}\n`);

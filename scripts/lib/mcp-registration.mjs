@@ -88,28 +88,28 @@ function requiredEnvironmentMatches(environment) {
 function describeDifferences(entry, desired, currentPaths, registeredNodeUsable) {
   const differences = [];
   const transport = entry?.transport;
-  if (entry?.enabled === false) differences.push('entry 已停用');
-  if (transport?.type !== 'stdio') return [...differences, 'transport 不是 stdio'];
-  if (!isNodeCommand(transport.command)) differences.push('command 不是 Node 執行檔');
-  if (!isAbsolutePortablePath(transport.command)) differences.push('Node command 不是絕對路徑');
-  if (!registeredNodeUsable) differences.push(`登記的 Node 不存在、無法執行或不是 ${REQUIRED_NODE_VERSION}`);
+  if (entry?.enabled === false) differences.push('entry is disabled');
+  if (transport?.type !== 'stdio') return [...differences, 'transport is not stdio'];
+  if (!isNodeCommand(transport.command)) differences.push('command is not a Node executable');
+  if (!isAbsolutePortablePath(transport.command)) differences.push('Node command is not an absolute path');
+  if (!registeredNodeUsable) differences.push(`registered Node does not exist, cannot run, or is not ${REQUIRED_NODE_VERSION}`);
 
   const args = Array.isArray(transport.args) ? transport.args : [];
   if (args.length !== 1) {
-    differences.push(`args 預期 1 個，實際 ${String(args.length)} 個`);
+    differences.push(`expected 1 arg, got ${String(args.length)}`);
   } else if (
     !samePath(args[0], currentPaths.launcherPath) &&
     !samePath(args[0], currentPaths.distPath)
   ) {
-    differences.push(`entry 指向其他位置：${String(args[0])}`);
+    differences.push(`entry points somewhere else: ${String(args[0])}`);
   }
 
   if (!requiredEnvironmentMatches(transport.env)) {
-    differences.push('loopback／port 環境設定與 BlockHand 基線不同');
+    differences.push('loopback/port environment differs from the BlockHand baseline');
   }
 
   if (!samePath(transport.command, desired.transport.command)) {
-    differences.push('Node 路徑與目前執行安裝器的 Node 不同');
+    differences.push('Node path differs from the Node running this installer');
   }
   return differences;
 }

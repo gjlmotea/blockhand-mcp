@@ -80,7 +80,7 @@ export function createBuildService(
     block: string,
     blockStates: string | null,
   ): PlannedFills {
-    assertIdentifier(block, '方塊 ID');
+    assertIdentifier(block, 'block ID');
     if (blockStates !== null) assertBlockStates(blockStates);
 
     // 實心長方體走的快速路徑不經過 scanSolid 的體積守門，所以這裡得自己先擋：
@@ -94,7 +94,7 @@ export function createBuildService(
       if (volume > options.maxBuildBlocks) {
         throw new MinecraftBridgeError(
           'build-too-large',
-          `這次建造需要 ${String(volume)} 個方塊，超過單次上限 ${String(options.maxBuildBlocks)}；請縮小尺寸或分批。`,
+          `This build needs ${String(volume)} blocks, over the per-build limit of ${String(options.maxBuildBlocks)}; make it smaller or split it into batches.`,
         );
       }
     }
@@ -107,12 +107,12 @@ export function createBuildService(
 
     const blockCount = totalBlocks(batches);
     if (blockCount === 0) {
-      throw new MinecraftBridgeError('empty-shape', '這組參數沒有產生任何方塊。');
+      throw new MinecraftBridgeError('empty-shape', 'These parameters produced no blocks.');
     }
     if (blockCount > options.maxBuildBlocks) {
       throw new MinecraftBridgeError(
         'build-too-large',
-        `這次建造需要 ${String(blockCount)} 個方塊，超過單次上限 ${String(options.maxBuildBlocks)}；請縮小尺寸或分批。`,
+        `This build needs ${String(blockCount)} blocks, over the per-build limit of ${String(options.maxBuildBlocks)}; make it smaller or split it into batches.`,
       );
     }
 
@@ -135,13 +135,13 @@ export function createBuildService(
 
   function planBlueprint(entries: readonly BlueprintEntry[]): PlannedFills {
     if (entries.length === 0) {
-      throw new MinecraftBridgeError('empty-shape', '藍圖沒有任何方塊。');
+      throw new MinecraftBridgeError('empty-shape', 'The blueprint has no blocks.');
     }
 
     // 同一種方塊（含狀態）才能合併成同一批 fill。
     const groups = new Map<string, { block: string; states: string | null; points: Vec3[] }>();
     for (const entry of entries) {
-      assertIdentifier(entry.block, '方塊 ID');
+      assertIdentifier(entry.block, 'block ID');
       const states = entry.blockStates ?? null;
       if (states !== null) assertBlockStates(states);
       const key = `${entry.block}|${states ?? ''}`;
@@ -171,7 +171,7 @@ export function createBuildService(
     if (blockCount > options.maxBuildBlocks) {
       throw new MinecraftBridgeError(
         'build-too-large',
-        `這份藍圖需要 ${String(blockCount)} 個方塊，超過單次上限 ${String(options.maxBuildBlocks)}。`,
+        `This blueprint needs ${String(blockCount)} blocks, over the per-build limit of ${String(options.maxBuildBlocks)}.`,
       );
     }
 

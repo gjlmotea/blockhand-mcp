@@ -19,7 +19,7 @@ describe('WriteLock', () => {
       return 'done';
     });
     expect(lock.holder).toMatchObject({ session: 'A', tool: 'mc_fill' });
-    await expect(lock.run('B', 'mc_set_block', async () => 'nope')).rejects.toThrow('另一個 AI 對話正在修改世界（mc_fill');
+    await expect(lock.run('B', 'mc_set_block', async () => 'nope')).rejects.toThrow('Another AI session is changing the world (mc_fill');
     gate.release();
     await expect(first).resolves.toBe('done');
     expect(lock.holder).toBeNull();

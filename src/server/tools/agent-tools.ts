@@ -16,14 +16,14 @@ import {
 import { batchToPayload, guard, ok, outcomeToPayload, summarizeBatch, summarizeOutcome } from '../tool-kit.js';
 
 const AGENT_NOTE =
-  'Agent 是 Education Edition 專屬的機器人，必須先用 mc_agent_create 召喚。方向是相對 Agent 自身面向，不是世界方位。';
+  'The Agent is the robot found only in Education Edition; summon it with mc_agent_create first. Directions are relative to the way the Agent faces, not world directions.';
 
 export function registerAgentTools(server: McpServer, service: BlockHandService): void {
   server.registerTool(
     'mc_agent_create',
     {
-      title: '召喚 Agent',
-      description: `在玩家旁邊生成 Agent。已存在時重複呼叫是安全的。${AGENT_NOTE}`,
+      title: 'Summon the Agent',
+      description: `Spawn the Agent next to the player. Calling it again when the Agent already exists is safe. ${AGENT_NOTE}`,
       inputSchema: z.object({}).strict(),
       outputSchema: commandOutcomeSchema(),
       annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false, openWorldHint: false },
@@ -38,13 +38,13 @@ export function registerAgentTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_agent_move',
     {
-      title: 'Agent 移動',
-      description: `讓 Agent 往指定方向走 steps 格，每格一條指令。被方塊擋住時該步會失敗但不會中斷後續。${AGENT_NOTE}`,
+      title: 'Move the Agent',
+      description: `Move the Agent steps blocks in a direction, one command per block. A step blocked by a block fails without stopping the rest. ${AGENT_NOTE}`,
       inputSchema: z
         .object({
           direction: agentDirectionSchema(),
           steps: z.number().int().min(1).max(64).default(1),
-          delayMs: z.number().int().min(0).max(2000).default(100).describe('每步間隔，給遊戲時間完成移動'),
+          delayMs: z.number().int().min(0).max(2000).default(100).describe('Delay between steps, so the game has time to finish each move'),
         })
         .strict(),
       outputSchema: batchOutcomeSchema(),
@@ -54,15 +54,15 @@ export function registerAgentTools(server: McpServer, service: BlockHandService)
       guard(async () => {
         const commands = Array.from({ length: steps }, () => agentCommands.move(direction));
         const batch = await service.runMany(commands, { stopOnError: false, delayMs });
-        return ok(batchToPayload(batch), summarizeBatch(batch, `Agent 往 ${direction} 移動`));
+        return ok(batchToPayload(batch), summarizeBatch(batch, `Agent move ${direction}`));
       }),
   );
 
   server.registerTool(
     'mc_agent_turn',
     {
-      title: 'Agent 轉向',
-      description: `讓 Agent 原地左轉或右轉，每次 90 度。times=2 等於轉身。${AGENT_NOTE}`,
+      title: 'Turn the Agent',
+      description: `Turn the Agent left or right in place, 90 degrees each time. times=2 turns it around. ${AGENT_NOTE}`,
       inputSchema: z
         .object({
           direction: turnDirectionSchema(),
@@ -76,15 +76,15 @@ export function registerAgentTools(server: McpServer, service: BlockHandService)
       guard(async () => {
         const commands = Array.from({ length: times }, () => agentCommands.turn(direction));
         const batch = await service.runMany(commands, { stopOnError: false, delayMs: 60 });
-        return ok(batchToPayload(batch), summarizeBatch(batch, `Agent ${direction} 轉 ${String(times)} 次`));
+        return ok(batchToPayload(batch), summarizeBatch(batch, `Agent turn ${direction} x${String(times)}`));
       }),
   );
 
   server.registerTool(
     'mc_agent_teleport',
     {
-      title: 'Agent 傳送到玩家身邊',
-      description: `把 Agent 叫到玩家旁邊。Agent 走丟、卡住或掉進洞裡時用這個回收。${AGENT_NOTE}`,
+      title: 'Teleport the Agent to the player',
+      description: `Bring the Agent to the player. Use it to recover the Agent when it is lost, stuck or has fallen into a hole. ${AGENT_NOTE}`,
       inputSchema: z.object({}).strict(),
       outputSchema: commandOutcomeSchema(),
       annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false, openWorldHint: false },
@@ -99,8 +99,8 @@ export function registerAgentTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_agent_act',
     {
-      title: 'Agent 攻擊／挖掘／耕地',
-      description: `對指定方向做動作：attack 攻擊生物、destroy 挖掉方塊並收進背包、till 把泥土翻成耕地。repeat 可連續執行。${AGENT_NOTE}`,
+      title: 'Agent attack / destroy / till',
+      description: `Act in a direction: attack hits a mob, destroy breaks a block and puts it in the inventory, till turns dirt into farmland. repeat runs it several times in a row. ${AGENT_NOTE}`,
       inputSchema: z
         .object({
           action: z.enum(['attack', 'destroy', 'till']),
@@ -129,8 +129,8 @@ export function registerAgentTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_agent_place',
     {
-      title: 'Agent 放置方塊',
-      description: `從指定背包槽（1–27）取出方塊放到指定方向。槽位空的時候會失敗。${AGENT_NOTE}`,
+      title: 'Agent place block',
+      description: `Take a block from an inventory slot (1-27) and place it in a direction. Fails when the slot is empty. ${AGENT_NOTE}`,
       inputSchema: z
         .object({
           slot: slotSchema(),
@@ -146,15 +146,15 @@ export function registerAgentTools(server: McpServer, service: BlockHandService)
       guard(async () => {
         const commands = Array.from({ length: repeat }, () => agentCommands.place(slot, direction));
         const batch = await service.runMany(commands, { stopOnError: false, delayMs });
-        return ok(batchToPayload(batch), summarizeBatch(batch, `Agent 放置槽 ${String(slot)} 到 ${direction}`));
+        return ok(batchToPayload(batch), summarizeBatch(batch, `Agent place slot ${String(slot)} ${direction}`));
       }),
   );
 
   server.registerTool(
     'mc_agent_collect',
     {
-      title: 'Agent 撿取掉落物',
-      description: `撿取 Agent 附近的掉落物。item 留空代表全部撿。${AGENT_NOTE}`,
+      title: 'Agent collect items',
+      description: `Pick up dropped items near the Agent. Leave item empty to pick up everything. ${AGENT_NOTE}`,
       inputSchema: z
         .object({ item: blockNameSchema().nullable().default(null) })
         .strict(),
@@ -173,16 +173,16 @@ export function registerAgentTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_agent_inventory',
     {
-      title: 'Agent 背包操作',
+      title: 'Agent inventory',
       description:
-        `對 Agent 背包做一件事：count 查槽內數量、space 查剩餘空間、detail 查物品細節、drop 丟出指定數量、dropAll 清空整槽方向、transfer 在槽之間搬移。${AGENT_NOTE}`,
+        `Do one thing with the Agent inventory: count reads the amount in a slot, space reads the room left, detail reads item details, drop drops a quantity, dropAll drops everything in a direction, transfer moves items between slots. ${AGENT_NOTE}`,
       inputSchema: z
         .object({
           action: z.enum(['count', 'space', 'detail', 'drop', 'dropAll', 'transfer']),
-          slot: slotSchema().optional().describe('count／space／detail／drop 需要'),
-          quantity: quantitySchema().optional().describe('drop／transfer 需要'),
-          direction: agentDirectionSchema().optional().describe('drop／dropAll 需要'),
-          destinationSlot: slotSchema().optional().describe('transfer 需要'),
+          slot: slotSchema().optional().describe('Required for count / space / detail / drop'),
+          quantity: quantitySchema().optional().describe('Required for drop / transfer'),
+          direction: agentDirectionSchema().optional().describe('Required for drop / dropAll'),
+          destinationSlot: slotSchema().optional().describe('Required for transfer'),
         })
         .strict(),
       outputSchema: commandOutcomeSchema(),
@@ -192,7 +192,7 @@ export function registerAgentTools(server: McpServer, service: BlockHandService)
       guard(async () => {
         const need = <T,>(value: T | undefined, label: string): T => {
           if (value === undefined) {
-            throw new Error(`action="${action}" 需要參數 ${label}。`);
+            throw new Error(`action="${action}" requires ${label}.`);
           }
           return value;
         };
@@ -226,9 +226,9 @@ export function registerAgentTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_agent_sense',
     {
-      title: 'Agent 感測周遭',
+      title: 'Agent sense surroundings',
       description:
-        `讀取 Agent 周圍狀態，不改變世界：inspect 看方塊種類、inspectData 看方塊資料值、detect 偵測該方向是否有實體方塊、detectRedstone 偵測紅石訊號。這是 Agent 的「眼睛」，行動前先看。`,
+        `Read what is around the Agent without changing the world: inspect reads the block type, inspectData reads the block data value, detect checks whether there is a solid block in that direction, detectRedstone checks for a redstone signal. These are the Agent's eyes; look before acting.`,
       inputSchema: z
         .object({
           mode: z.enum(['inspect', 'inspectData', 'detect', 'detectRedstone']).default('inspect'),
@@ -256,9 +256,9 @@ export function registerAgentTools(server: McpServer, service: BlockHandService)
   server.registerTool(
     'mc_agent_program',
     {
-      title: '執行一段 Agent 程式',
+      title: 'Run an Agent program',
       description:
-        '把一連串 Agent 動作當成一支程式依序執行，這是讓 Agent 真正「做事」的主力工具：邊走邊鋪路、挖一條隧道、耕一整片田都用它。每步結果都會個別回報，可設定失敗即停。',
+        'Run a sequence of Agent actions in order as one program. This is the main tool for getting real work done with the Agent: laying a path as it walks, digging a tunnel, tilling a whole field. Each step is reported separately, and it can stop at the first failure.',
       inputSchema: z
         .object({
           steps: z.array(agentProgramStepSchema()).min(1).max(256),
@@ -270,7 +270,7 @@ export function registerAgentTools(server: McpServer, service: BlockHandService)
             .max(2000)
             .nullable()
             .default(null)
-            .describe('每步間隔；null 使用預設 100 ms'),
+            .describe('Delay between steps; null uses the default of 100 ms'),
         })
         .strict(),
       outputSchema: batchOutcomeSchema().extend({ commands: z.array(z.string()) }).strict(),
@@ -285,7 +285,7 @@ export function registerAgentTools(server: McpServer, service: BlockHandService)
         );
         return ok(
           { ...batchToPayload(result.batch), commands: [...result.commands] },
-          summarizeBatch(result.batch, `Agent 程式（${String(steps.length)} 步）`),
+          summarizeBatch(result.batch, `Agent program (${String(steps.length)} steps)`),
         );
       }),
   );

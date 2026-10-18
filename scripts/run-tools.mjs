@@ -28,7 +28,7 @@ import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotoc
 
 const planPath = process.argv[2];
 if (planPath === undefined) {
-  process.stderr.write('用法：node scripts/run-tools.mjs <plan.json>\n');
+  process.stderr.write('Usage: node scripts/run-tools.mjs <plan.json>\n');
   process.exit(2);
 }
 
@@ -59,7 +59,7 @@ const client = new Client({ name: 'minecraft-edu-runner', version: '1.0.0' });
 let failures = 0;
 
 function summary(result) {
-  return result?.content?.[0]?.text ?? '(無摘要)';
+  return result?.content?.[0]?.text ?? '(no summary)';
 }
 
 try {
@@ -68,11 +68,11 @@ try {
   const status = await client.callTool({ name: 'mc_status', arguments: {} });
   if (status.structuredContent?.connected !== true) {
     process.stdout.write(
-      `\n橋接已監聽。請在遊戲聊天列輸入：\n\n    ${status.structuredContent?.connectCommand}\n\n等待連線…\n\n`,
+      `\nThe bridge is listening. Type this into the game chat:\n\n    ${status.structuredContent?.connectCommand}\n\nWaiting for the connection…\n\n`,
     );
     if (plan.autoConnect === true) {
       process.stdout.write(
-        '  · autoConnect 已停用：BlockHand 不會操作前景視窗或鍵盤，請手動輸入上方指令。\n\n',
+        '  · autoConnect is disabled: BlockHand never touches the foreground window or keyboard, so type the command above yourself.\n\n',
       );
     }
 
@@ -90,7 +90,7 @@ try {
       }
     }
     if (!connected) {
-      process.stdout.write('未在時限內連上，中止。\n');
+      process.stdout.write('Not connected within the time limit; stopping.\n');
       process.exitCode = 1;
       throw new Error('not-connected');
     }
@@ -98,7 +98,7 @@ try {
 
   const ready = await client.callTool({ name: 'mc_status', arguments: {} });
   process.stdout.write(
-    `已連線（加密：${ready.structuredContent?.encrypted === true ? '是' : '否'}）\n\n`,
+    `Connected (encrypted: ${ready.structuredContent?.encrypted === true ? 'yes' : 'no'})\n\n`,
   );
 
   for (const [index, step] of (plan.calls ?? []).entries()) {
@@ -112,7 +112,7 @@ try {
       );
     } catch (error) {
       failures += 1;
-      process.stdout.write(`${label}  ✗ 呼叫失敗：${error instanceof Error ? error.message : String(error)}\n`);
+      process.stdout.write(`${label}  ✗ call failed: ${error instanceof Error ? error.message : String(error)}\n`);
       continue;
     }
 
@@ -130,7 +130,7 @@ try {
   }
 
   process.stdout.write(
-    `\n───────────────\n完成 ${String((plan.calls ?? []).length - failures)}／${String((plan.calls ?? []).length)} 步\n`,
+    `\n───────────────\n${String((plan.calls ?? []).length - failures)}/${String((plan.calls ?? []).length)} steps succeeded\n`,
   );
   if (failures > 0) process.exitCode = 1;
 } finally {

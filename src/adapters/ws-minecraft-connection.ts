@@ -29,6 +29,7 @@ import type {
   GameEventRecord,
 } from '../domain/contracts.js';
 import { MinecraftBridgeError } from '../domain/contracts.js';
+import { connectionNoticeCommand, noticeLanguageFromDaytime } from '../domain/connection-notice.js';
 import type { CommandOptions, MinecraftConnection, SequenceOptions } from '../ports/minecraft-connection.js';
 import { log } from '../logger.js';
 import type { EncryptionSession } from './ws-encryption.js';
@@ -196,7 +197,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
       const connectCommand = currentStatus().connectCommand;
       throw new MinecraftBridgeError(
         'not-connected',
-        `Minecraft 尚未連上。請在遊戲聊天列輸入：${connectCommand}（世界需開啟作弊／Cheats）。`,
+        `Minecraft is not connected. Type this in the game chat: ${connectCommand} (the world must have cheats on).`,
       );
     }
     return socket;
@@ -206,7 +207,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
     const target = requireSocket();
     if (negotiation !== null) await negotiation;
     if (socket !== target || target.readyState !== 1) {
-      throw new MinecraftBridgeError('connection-changed', '等待握手時遊戲連線已改變；沒有把原指令送到新連線。');
+      throw new MinecraftBridgeError('connection-changed', 'The game connection changed while waiting for the handshake; the command was not sent to the new connection.');
     }
     return target;
   }
@@ -403,7 +404,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
         ok: false,
         commandLine,
         statusCode: null,
-        statusMessage: '排隊等待送出時遊戲連線已改變；沒有把原指令送到新連線。',
+        statusMessage: 'The game connection changed while the command was queued; it was not sent to the new connection.',
         data: null,
         elapsedMs: 0,
       });
@@ -424,7 +425,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
           ok: false,
           commandLine,
           statusCode: null,
-          statusMessage: `等待遊戲回應超過 ${String(timeoutMs)} ms。`,
+          statusMessage: `No reply from the game within ${String(timeoutMs)} ms.`,
           data: null,
           elapsedMs: Date.now() - startedAt,
         });
@@ -479,14 +480,14 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
     // 舊 callback 也不能去扣新 session 的計數。
     const owner = commandSession;
     if (owner === null || owner.socket !== target || !owner.open) {
-      return Promise.resolve(notSent('排隊前遊戲連線已改變；沒有把原指令送到新連線。'));
+      return Promise.resolve(notSent('The game connection changed before the command was queued; it was not sent to the new connection.'));
     }
 
     if (owner.queued >= MAX_QUEUED_COMMANDS) {
       throw new MinecraftBridgeError(
         'command-queue-full',
-        `已有 ${String(owner.queued)} 條指令排隊等待送出，達到上限 ${String(MAX_QUEUED_COMMANDS)}；這條指令沒有送出。` +
-          '請等前面的指令收斂（可用 mc_status 看 queuedCommands 與 commandState），不要繼續平行送指令。',
+        `${String(owner.queued)} commands are already queued, which is the limit of ${String(MAX_QUEUED_COMMANDS)}; this command was not sent. ` +
+          'Wait for the earlier commands to settle (check queuedCommands and commandState with mc_status) and stop sending commands in parallel.',
       );
     }
 
@@ -495,10 +496,10 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
     const outcome = owner.chain.then(() => {
       owner.queued -= 1;
       if (!owner.open || socket !== target || target.readyState !== 1) {
-        return notSent('排隊等待送出時遊戲連線已改變；沒有把原指令送到新連線。');
+        return notSent('The game connection changed while the command was queued; it was not sent to the new connection.');
       }
       if (Date.now() > enqueueDeadline) {
-        return notSent(`排隊等待送出超過 ${String(timeoutMs)} ms，這條指令沒有送出，之後也不會送出。`);
+        return notSent(`The command waited in the queue for more than ${String(timeoutMs)} ms; it was not sent and will not be sent later.`);
       }
       return sendAndAwait(target, commandLine, timeoutMs, internal, commandVersion, onResponse);
     });
@@ -612,7 +613,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
   }
 
   function attachSocket(next: WebSocket): void {
-    if (socket !== null) failAllPending('舊遊戲連線已被新連線取代；未重送原指令。');
+    if (socket !== null) failAllPending('The old game connection was replaced by a new one; the command was not resent.');
     retireCommandSession();
     if (socket !== null && socket.readyState === 1) {
       log('info', 'replacing previous connection', {});
@@ -649,7 +650,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
         session = null;
         negotiation = null;
         connectedAt = null;
-        failAllPending('Minecraft 連線已中斷。');
+        failAllPending('The Minecraft connection was lost.');
         retireCommandSession();
       }
       log('info', 'minecraft disconnected', {});
@@ -678,20 +679,23 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
       });
   }
 
-  /** 只是給玩家看的回饋：送不出去就記錄，不影響連線本身。 */
+  /**
+   * 只是給玩家看的回饋：送不出去就記錄，不影響連線本身。
+   * 先用唯讀探測認出遊戲語言，再用同一種語言顯示，見 connection-notice.ts。
+   */
   function announceConnection(target: WebSocket): void {
     const { host, port } = currentStatus();
-    const rawtext = [
-      { text: `§a✔ 已連上 Claude §7(${host}:${String(port)})` },
-      { text: '\n§7之後不用再打 /connect：連著時再打，遊戲不會顯示任何字。/reload all、換世界通常也不會斷線。' },
-    ];
-    try {
-      void dispatch(target, `tellraw @a ${JSON.stringify({ rawtext })}`, options.commandTimeoutMs, true).then((outcome) => {
-        if (!outcome.ok) log('error', 'connection notice not shown', { detail: outcome.statusMessage });
-      });
-    } catch (error: unknown) {
+    const announce = async (): Promise<void> => {
+      const probe = await dispatch(target, KEEPALIVE_COMMAND, options.commandTimeoutMs, true);
+      if (socket !== target || target.readyState !== 1) return;
+      const language = noticeLanguageFromDaytime(probe.ok ? probe.statusMessage : null);
+      const notice = connectionNoticeCommand(language, `${host}:${String(port)}`);
+      const outcome = await dispatch(target, notice, options.commandTimeoutMs, true);
+      if (!outcome.ok) log('error', 'connection notice not shown', { detail: outcome.statusMessage });
+    };
+    announce().catch((error: unknown) => {
       log('error', 'connection notice not shown', { detail: error instanceof Error ? error.message : String(error) });
-    }
+    });
   }
 
   return {
@@ -745,7 +749,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
           const detail = error instanceof Error ? error.message : String(error);
           throw new MinecraftBridgeError(
             'listen-failed',
-            `無法在 ${options.host}:${String(options.port)} 監聽：${detail}`,
+            `Could not listen on ${options.host}:${String(options.port)}: ${detail}`,
           );
         }
 
@@ -759,7 +763,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
           const detail = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
           throw new MinecraftBridgeError(
             'listen-failed',
-            `優先埠 ${options.host}:${String(options.port)} 已占用，且無法取得空閒埠：${detail}`,
+            `The preferred port ${options.host}:${String(options.port)} is in use, and no free port could be obtained: ${detail}`,
           );
         }
       }
@@ -767,7 +771,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
       const address = created.address();
       if (address === null || typeof address === 'string') {
         await new Promise<void>((resolve) => created.close(() => resolve()));
-        throw new MinecraftBridgeError('listen-failed', 'WebSocket bridge 無法取得實際監聽埠。');
+        throw new MinecraftBridgeError('listen-failed', 'The WebSocket bridge could not determine the port it is listening on.');
       }
       server = created;
       listeningPort = address.port;
@@ -824,7 +828,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
         clearInterval(heartbeat);
         heartbeat = null;
       }
-      failAllPending('MCP server 正在關閉。');
+      failAllPending('The MCP server is shutting down.');
       retireCommandSession();
 
       const active = server;
@@ -855,7 +859,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
           finish(
             new MinecraftBridgeError(
               'close-timeout',
-              `WebSocket bridge 關閉超過 ${String(BRIDGE_CLOSE_TIMEOUT_MS)} ms。`,
+              `Closing the WebSocket bridge took more than ${String(BRIDGE_CLOSE_TIMEOUT_MS)} ms.`,
             ),
           );
         }, BRIDGE_CLOSE_TIMEOUT_MS);
@@ -912,7 +916,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
 
       for (const [index, commandLine] of commandLines.entries()) {
         if (socket !== sequenceSocket) {
-          throw new MinecraftBridgeError('connection-changed', '批次執行期間遊戲連線已改變；其餘指令未送出。');
+          throw new MinecraftBridgeError('connection-changed', 'The game connection changed during the batch; the remaining commands were not sent.');
         }
         const outcome = await this.runCommand(commandLine);
         outcomes.push(outcome);

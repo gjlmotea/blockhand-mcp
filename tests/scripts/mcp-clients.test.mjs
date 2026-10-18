@@ -131,7 +131,7 @@ describe('讀取策略與 client 解析', () => {
   });
 
   it('未知 client 明確拒絕並列出可用值', () => {
-    expect(() => resolveClient('cursor')).toThrow(/不支援的 client/u);
+    expect(() => resolveClient('cursor')).toThrow(/Unsupported client/u);
     expect(() => resolveClient('cursor')).toThrow(/codex/u);
   });
 });

@@ -199,7 +199,7 @@ describe('generateShape', () => {
   it('過長的線段會被擋下', () => {
     expect(() =>
       generateShape({ kind: 'line', from: { x: 0, y: 0, z: 0 }, to: { x: 99_999, y: 0, z: 0 } }),
-    ).toThrow(/超過上限/);
+    ).toThrow(/over the limit/);
   });
 });
 

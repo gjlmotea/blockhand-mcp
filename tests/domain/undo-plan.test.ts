@@ -27,20 +27,20 @@ describe('bounded undo planning',()=>{
     expect(outline.blockCount).toBe(26);expect(expand(outline).has('1,11,1')).toBe(false);
   });
   it.each(['fill 0 0 0 20000000 320 20000000 stone','fill 0 0 0 5 5 5 glass'])('rejects large bounds before enumerating them: %s',command=>{
-    expect(()=>planUndo([command],128)).toThrow('預算');
+    expect(()=>planUndo([command],128)).toThrow('budget');
   });
   it('applies one budget to the whole command sequence',()=>{
-    expect(()=>planUndo(['fill 0 0 0 127 0 0 glass','setblock 128 0 0 glass'],128)).toThrow('整個操作');
+    expect(()=>planUndo(['fill 0 0 0 127 0 0 glass','setblock 128 0 0 glass'],128)).toThrow('The whole operation');
   });
   it.each(['setblock ~ ~ ~ stone','setblock 0 10 0 chest','setblock 0 10 0 water','setblock 0 10 0 sand','setblock 0 10 0 stone destroy','fill 0 10 0 1 10 1 stone replace dirt','setblock 0 10 0 quartz_block ["chisel_type":"lines"]'])('rejects unsupported semantics: %s',command=>{
-    expect(()=>planUndo([command],128)).toThrow('自動 Undo');
+    expect(()=>planUndo([command],128)).toThrow('Automatic Undo');
   });
   it('rejects mixed macros rather than silently omitting some writes',()=>{
-    expect(()=>planUndo(['setblock 0 10 0 stone','summon pig'],128)).toThrow('混入');
+    expect(()=>planUndo(['setblock 0 10 0 stone','summon pig'],128)).toThrow('cannot include other commands');
     expect(planUndo(['summon pig'],128)).toBeNull();
   });
   it('rejects excessive snapshot fragmentation',()=>{
-    expect(()=>planUndo(Array.from({length:65},(_,i)=>`setblock ${i*2} 20 0 glass`),128)).toThrow('太零散');
+    expect(()=>planUndo(Array.from({length:65},(_,i)=>`setblock ${i*2} 20 0 glass`),128)).toThrow('too fragmented');
   });
   it('keeps native restore guards within the command limit even at extreme coordinates',()=>{
     const p=planUndo(['fill 29999993 100 -30000000 30000000 107 -29999993 light_blue_stained_glass'],MAX_UNDO_BLOCKS)!;

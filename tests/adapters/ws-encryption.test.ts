@@ -365,7 +365,7 @@ describe('websocket 加密握手', () => {
       priming(); return true;
     });
     await primerSeen;
-    const rejected = expect(connection.runCommand('say must-not-replay')).rejects.toThrow('連線已改變');
+    const rejected = expect(connection.runCommand('say must-not-replay')).rejects.toThrow('connection changed');
     const replacement = new WebSocket(address);
     client = replacement;
     const received: string[] = [];
@@ -423,7 +423,7 @@ describe('websocket 加密握手', () => {
     stalled.push(connection.runCommand('testforblock 0 200 0 air'));
     await vi.waitFor(() =>
       expect(connection.status()).toMatchObject({ inFlightCommands: 1, queuedCommands: 64 }));
-    await expect(connection.runCommand('say overflow')).rejects.toThrow(/上限/);
+    await expect(connection.runCommand('say overflow')).rejects.toThrow(/limit/);
 
     const replacement = new WebSocket(address);
     client = replacement;
@@ -568,6 +568,6 @@ describe('createEncryptionOffer', () => {
 
   it('公鑰壞掉時給出明確錯誤而不是崩潰', () => {
     const offer = createEncryptionOffer();
-    expect(() => offer.complete('not-a-key')).toThrow(/公鑰/);
+    expect(() => offer.complete('not-a-key')).toThrow(/public key/);
   });
 });

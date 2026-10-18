@@ -24,7 +24,7 @@ export class WriteLock {
         const seconds = Math.round((Date.now() - current.since) / 1000);
         return Promise.reject(
           new Error(
-            `另一個 AI 對話正在修改世界（${current.tool}，已進行 ${String(seconds)} 秒）。等它完成再試，避免兩邊的指令互相穿插。`,
+            `Another AI session is changing the world (${current.tool}, running for ${String(seconds)} s). Wait for it to finish and try again, so the two sets of commands do not interleave.`,
           ),
         );
       }

@@ -78,7 +78,7 @@ try {
 
   const initial = await client.callTool({ name: 'mc_status', arguments: {} });
   process.stdout.write(
-    `\n橋接已監聽。請在 Minecraft Education 聊天列輸入：\n\n    ${initial.structuredContent.connectCommand}\n\n等待連線中（最多 ${waitSeconds} 秒）...\n\n`,
+    `\nThe bridge is listening. Type this into the Minecraft Education chat:\n\n    ${initial.structuredContent.connectCommand}\n\nWaiting for the connection (up to ${waitSeconds} seconds)...\n\n`,
   );
 
   // 分段輪詢：單次等待受工具 schema 上限與 MCP client 預設逾時（60 秒）雙重限制，
@@ -92,17 +92,17 @@ try {
       arguments: { timeoutSeconds: chunkSeconds },
     });
     if (connected.isError === true) {
-      throw new Error(`mc_await_connection 失敗：${text(connected)}`);
+      throw new Error(`mc_await_connection failed: ${text(connected)}`);
     }
     if (connected.structuredContent?.connected === true) break;
-    process.stdout.write(`  ...仍在等待（剩 ${Math.max(0, Math.round((deadline - Date.now()) / 1000))} 秒）\n`);
+    process.stdout.write(`  ...still waiting (${Math.max(0, Math.round((deadline - Date.now()) / 1000))} seconds left)\n`);
   }
 
   if (connected.structuredContent?.connected !== true) {
-    process.stdout.write('\n未在時限內連上，中止驗證。\n');
+    process.stdout.write('\nNot connected within the time limit; stopping the check.\n');
     process.exitCode = 1;
   } else {
-    record('WebSocket 連線建立', true, `第 ${connected.structuredContent.connectionCount} 次連線`);
+    record('WebSocket connection established', true, `connection #${connected.structuredContent.connectionCount}`);
 
     /* 1. 讀玩家位置——所有建造座標都以此為基準。
      *
@@ -127,15 +127,15 @@ try {
     }
 
     record(
-      'mc_query_target 讀出玩家座標',
+      'mc_query_target reads the player position',
       origin !== null,
       origin === null
-        ? `全部選擇器都失敗：${attempts.join('；')}`
-        : `${usedSelector} 讀到玩家在 (${origin.x}, ${origin.y}, ${origin.z})`,
+        ? `every selector failed: ${attempts.join('; ')}`
+        : `${usedSelector} found the player at (${origin.x}, ${origin.y}, ${origin.z})`,
     );
 
     if (origin === null) {
-      throw new Error(`拿不到玩家座標，後續建造無法定位。嘗試紀錄：${attempts.join('；')}`);
+      throw new Error(`Could not get the player position, so the builds that follow have no reference point. Attempts: ${attempts.join('; ')}`);
     }
 
     /* 1.5 事件訂閱必須在動作之前。
@@ -159,35 +159,35 @@ try {
       if (result.isError !== true) subscribed.push(eventName);
     }
     record(
-      'mc_events_subscribe 提前訂閱事件',
+      'mc_events_subscribe subscribes to events up front',
       subscribed.length === watchedEvents.length,
-      `已訂閱：${subscribed.join(', ')}`,
+      `subscribed: ${subscribed.join(', ')}`,
     );
 
     /* 2. 在遊戲內說話。 */
     const said = await client.callTool({
       name: 'mc_message',
-      arguments: { channel: 'say', message: 'BlockHand 已接上，開始自我驗證。' },
+      arguments: { channel: 'say', message: 'BlockHand connected; starting the self-check.' },
     });
-    record('mc_message 在遊戲內發話', said.structuredContent?.ok === true, text(said));
+    record('mc_message speaks in the game', said.structuredContent?.ok === true, text(said));
 
     /* 3. 世界設定：把時間設成白天，方便肉眼確認。 */
     const day = await client.callTool({
       name: 'mc_world_settings',
       arguments: { setting: 'time', value: 'day' },
     });
-    record('mc_world_settings 設定時間', day.structuredContent?.ok === true, text(day));
+    record('mc_world_settings sets the time', day.structuredContent?.ok === true, text(day));
 
     /* 4. Agent：召喚 → 感測 → 走動。 */
     const created = await client.callTool({ name: 'mc_agent_create', arguments: {} });
-    record('mc_agent_create 召喚 Agent', created.structuredContent?.ok === true, text(created));
+    record('mc_agent_create summons the Agent', created.structuredContent?.ok === true, text(created));
 
     const sensed = await client.callTool({
       name: 'mc_agent_sense',
       arguments: { mode: 'detect', direction: 'down' },
     });
     record(
-      'mc_agent_sense 感測腳下',
+      'mc_agent_sense detects the block below',
       sensed.structuredContent !== undefined,
       JSON.stringify(sensed.structuredContent?.data ?? sensed.structuredContent?.statusMessage),
     );
@@ -204,9 +204,9 @@ try {
       },
     });
     record(
-      'mc_agent_program 走出 L 形路徑',
+      'mc_agent_program walks an L-shaped path',
       walked.structuredContent?.issued === 5,
-      `送出 ${walked.structuredContent?.issued} 條、成功 ${walked.structuredContent?.succeeded} 條`,
+      `${walked.structuredContent?.issued} sent, ${walked.structuredContent?.succeeded} succeeded`,
     );
 
     /* 5. 建造：先預覽，再動工，最後回頭驗證方塊真的在。 */
@@ -218,9 +218,9 @@ try {
       arguments: { shape, block: 'glass' },
     });
     record(
-      'mc_build_preview 先算不動工',
+      'mc_build_preview computes without building',
       preview.structuredContent?.blockCount > 0,
-      `${preview.structuredContent?.blockCount} 方塊 → ${preview.structuredContent?.fillBatches} 條 fill（省下 ${preview.structuredContent?.savedCommands} 次往返）`,
+      `${preview.structuredContent?.blockCount} blocks → ${preview.structuredContent?.fillBatches} fill commands (${preview.structuredContent?.savedCommands} round trips saved)`,
     );
 
     /* 先清空目標區域。
@@ -235,7 +235,7 @@ try {
       arguments: { from: clearFrom, to: clearTo, block: 'air' },
     }, undefined, { timeout: BUILD_TIMEOUT_MS });
     process.stdout.write(
-      `  · 建造前清空 ${JSON.stringify(clearFrom)}–${JSON.stringify(clearTo)}：${cleared.structuredContent?.ok === true ? '已清空' : '原本就是空的'}\n`,
+      `  · Before building, cleared ${JSON.stringify(clearFrom)}–${JSON.stringify(clearTo)}: ${cleared.structuredContent?.ok === true ? 'cleared' : 'already empty'}\n`,
     );
 
     const built = await client.callTool({
@@ -243,9 +243,9 @@ try {
       arguments: { shape, block: 'glass' },
     }, undefined, { timeout: BUILD_TIMEOUT_MS });
     record(
-      'mc_build_shape 蓋出空心玻璃球',
+      'mc_build_shape builds a hollow glass sphere',
       built.structuredContent?.ok === true,
-      `${built.structuredContent?.succeeded}/${built.structuredContent?.issued} 條指令成功，用時 ${built.structuredContent?.elapsedMs} ms`,
+      `${built.structuredContent?.succeeded}/${built.structuredContent?.issued} commands succeeded in ${built.structuredContent?.elapsedMs} ms`,
     );
 
     /* 球心正上方 radius 格必定是殼上的方塊。 */
@@ -255,9 +255,9 @@ try {
       arguments: { position: shellPoint, block: 'glass' },
     });
     record(
-      'mc_test_block 回頭驗證方塊真的存在',
+      'mc_test_block confirms the block is really there',
       verified.structuredContent?.matches === true,
-      `(${shellPoint.x}, ${shellPoint.y}, ${shellPoint.z}) 是 glass：${verified.structuredContent?.matches}`,
+      `(${shellPoint.x}, ${shellPoint.y}, ${shellPoint.z}) is glass: ${verified.structuredContent?.matches}`,
     );
 
     /* 6. 藍圖：用逐格資料蓋一根柱子，驗證合併邏輯在真機也對。 */
@@ -270,13 +270,13 @@ try {
       arguments: { entries: pillar },
     }, undefined, { timeout: BUILD_TIMEOUT_MS });
     record(
-      'mc_build_blueprint 逐格藍圖合併成單一 fill',
+      'mc_build_blueprint merges a per-block blueprint into one fill',
       blueprint.structuredContent?.plan?.fillBatches === 1,
-      `5 個方塊合併成 ${blueprint.structuredContent?.plan?.fillBatches} 條指令`,
+      `5 blocks merged into ${blueprint.structuredContent?.plan?.fillBatches} command(s)`,
     );
 
     /* 7. 事件：收取這段期間累積的真實遊戲事件。 */
-    process.stdout.write('\n  → 請在遊戲裡走幾步、或在聊天列打一句話（10 秒內）…\n\n');
+    process.stdout.write('\n  → Walk a few steps in the game or type a line in the chat (within 10 seconds)…\n\n');
     await new Promise((resolve) => setTimeout(resolve, 10_000));
 
     const polled = await client.callTool({
@@ -285,11 +285,11 @@ try {
     });
     const received = polled.structuredContent?.events ?? [];
     record(
-      'mc_events_subscribe/poll 收到真實遊戲事件',
+      'mc_events_subscribe/poll receives real game events',
       received.length > 0,
       received.length > 0
-        ? `收到 ${received.length} 筆：${[...new Set(received.map((event) => event.eventName))].join(', ')}`
-        : '沒有收到事件（可能該世界不觸發此類事件）',
+        ? `received ${received.length}: ${[...new Set(received.map((event) => event.eventName))].join(', ')}`
+        : 'no events received (this world may not fire these events)',
     );
 
     /* 8. 政策閘門在真機同樣生效。 */
@@ -297,11 +297,11 @@ try {
       name: 'mc_run_command',
       arguments: { command: `connect 127.0.0.1:${port}` },
     });
-    record('政策閘門擋下會切斷橋接的指令', forbidden.isError === true, text(forbidden));
+    record('Policy gate blocks a command that would cut the bridge', forbidden.isError === true, text(forbidden));
 
     /* 9. 收尾。 */
     if (keepBuild) {
-      record('保留示範建築', true, `玻璃球中心 (${center.x}, ${center.y}, ${center.z})，半徑 6`);
+      record('Demo build kept', true, `glass sphere centered at (${center.x}, ${center.y}, ${center.z}), radius 6`);
     } else {
       const cleanup = await client.callTool({
         name: 'mc_build_shape',
@@ -312,29 +312,29 @@ try {
         arguments: { entries: pillar.map((entry) => ({ ...entry, block: 'air' })) },
       }, undefined, { timeout: BUILD_TIMEOUT_MS });
       record(
-        '清除示範建築，世界恢復原狀',
+        'Demo build removed, world restored',
         cleanup.structuredContent?.ok === true && cleanupPillar.structuredContent?.ok === true,
-        '玻璃球與光柱已填回 air',
+        'glass sphere and lantern pillar filled back with air',
       );
     }
 
     const finalStatus = await client.callTool({ name: 'mc_status', arguments: {} });
     record(
-      '最終狀態',
+      'Final status',
       finalStatus.structuredContent?.connected === true,
-      `本次共送出 ${finalStatus.structuredContent?.commandsIssued} 條指令`,
+      `${finalStatus.structuredContent?.commandsIssued} commands sent in this run`,
     );
   }
 } catch (error) {
-  record('未預期的錯誤', false, error instanceof Error ? error.message : String(error));
+  record('Unexpected error', false, error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 } finally {
   const failed = steps.filter((step) => !step.passed);
   process.stdout.write(
-    `\n───────────────\n通過 ${steps.length - failed.length}／${steps.length} 項\n`,
+    `\n───────────────\n${steps.length - failed.length}/${steps.length} passed\n`,
   );
   if (failed.length > 0) {
-    process.stdout.write(`失敗項目：${failed.map((step) => step.name).join('、')}\n`);
+    process.stdout.write(`Failed: ${failed.map((step) => step.name).join(', ')}\n`);
     process.exitCode = 1;
   }
   await client.close();

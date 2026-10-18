@@ -82,7 +82,7 @@ The game connects to the server, not the other way round.
    /connect 127.0.0.1:19131
    ```
 
-When the connection is made, a green "✔" line appears in the chat (the text is currently in Traditional Chinese, see [Known limitations](#known-limitations)). You can also ask the AI to call `mc_status`, which returns the exact `connectCommand`.
+When the connection is made, a green "✔ BlockHand connected" line appears in the chat, in the game's own language: English, Traditional Chinese or Simplified Chinese, and English for any other game language. You can also ask the AI to call `mc_status`, which returns the exact `connectCommand`.
 
 ### 3. Ask for something
 
@@ -273,7 +273,7 @@ Everything has a default; no `.env` file is needed.
 | `MINECRAFT_EDU_HUB_PORT` | `19132` | Local control port the sessions use to reach the hub; also the lock that decides which process is the hub |
 | `MINECRAFT_EDU_HUB_DIR` | `~/.blockhand` | Hub state file `hub.json` (with an access key readable only by the local user) and the log `hub.log` |
 | `MINECRAFT_EDU_HUB_IDLE_MS` | `600000` | The hub exits after this long with no session check-ins and no game connection |
-| `MINECRAFT_EDU_CONNECT_NOTICE` | on | Show the green "✔" connection line in chat; `0` turns it off |
+| `MINECRAFT_EDU_CONNECT_NOTICE` | on | Show the green "✔ BlockHand connected" line in chat, in the game language (detected with one read-only `time query daytime` first); `0` turns it off |
 | `MINECRAFT_EDU_WS_PORT_FALLBACK` | `1` | Pick a free port when the preferred one is taken; `0` fails instead |
 | `MINECRAFT_EDU_COMMAND_TIMEOUT_MS` | `10000` | How long to wait for the game to answer one command |
 | `MINECRAFT_EDU_KEEPALIVE_INTERVAL_MS` | `30000` | Interval of the idle keepalive probe (`time query daytime`); three unanswered probes in a row close the connection |
@@ -315,7 +315,7 @@ When a built-in command such as `time` answers "Unknown command", the tools add 
 
 ## Known limitations
 
-- **Messages are in Traditional Chinese for now.** Tool descriptions, server instructions, error messages and the in-game connection notice are written in Traditional Chinese. AI models read them without trouble, and this README and the package metadata are in English; English messages are planned.
+- **Text from the game stays in the game's language.** Tool descriptions, server instructions and error messages are in English, but what the game itself returns (`statusMessage`, and the block names from `mc_read_block`) comes back in the game language.
 - The world must have Cheats on; otherwise the game rejects every command.
 - The Agent exists only in Education Edition.
 - Event names and the `agent` subcommands are not formally documented by Mojang; they come from public observation and may change with game updates. `mc_events_subscribe` accepts names outside the known list but marks them unverified.

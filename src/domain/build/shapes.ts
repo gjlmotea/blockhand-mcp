@@ -445,12 +445,12 @@ function axisComponents(
 
 function assertPositive(value: number, label: string, max: number): number {
   if (!Number.isFinite(value) || value <= 0) {
-    throw new MinecraftBridgeError('invalid-shape', `${label} 必須是正數，實際收到：${String(value)}`);
+    throw new MinecraftBridgeError('invalid-shape', `${label} must be a positive number; got ${String(value)}`);
   }
   if (value > max) {
     throw new MinecraftBridgeError(
       'invalid-shape',
-      `${label} ${String(value)} 超過上限 ${String(max)}。`,
+      `${label} ${String(value)} is over the limit of ${String(max)}.`,
     );
   }
   return value;
@@ -465,7 +465,7 @@ function scanSolid(bounds: Bounds, inside: InsideTest, hollow: boolean, neighbou
   if (volume > MAX_SCAN_VOLUME) {
     throw new MinecraftBridgeError(
       'shape-too-large',
-      `形狀掃描體積 ${String(volume)} 超過上限 ${String(MAX_SCAN_VOLUME)}；請縮小尺寸或拆成多次建造。`,
+      `The shape scan volume ${String(volume)} is over the limit of ${String(MAX_SCAN_VOLUME)}; make the shape smaller or split it into several builds.`,
     );
   }
 
@@ -524,7 +524,7 @@ function line3d(from: Vec3, to: Vec3): Vec3[] {
 
   if (steps === 0) return [{ x: from.x, y: from.y, z: from.z }];
   if (steps > 4096) {
-    throw new MinecraftBridgeError('shape-too-large', `線段長度 ${String(steps)} 超過上限 4096。`);
+    throw new MinecraftBridgeError('shape-too-large', `The line length ${String(steps)} is over the limit of 4096.`);
   }
 
   const points: Vec3[] = [];
@@ -580,13 +580,13 @@ function assertPositiveInteger(value: number, label: string, max: number): numbe
   if (!Number.isInteger(value) || value < 1) {
     throw new MinecraftBridgeError(
       'invalid-shape',
-      `${label} 必須是正整數，實際收到：${String(value)}`,
+      `${label} must be a positive integer; got ${String(value)}`,
     );
   }
   if (value > max) {
     throw new MinecraftBridgeError(
       'invalid-shape',
-      `${label} ${String(value)} 超過上限 ${String(max)}。`,
+      `${label} ${String(value)} is over the limit of ${String(max)}.`,
     );
   }
   return value;
@@ -596,13 +596,13 @@ function assertNonNegative(value: number, label: string, max: number): number {
   if (!Number.isFinite(value) || value < 0) {
     throw new MinecraftBridgeError(
       'invalid-shape',
-      `${label} 不能是負數，實際收到：${String(value)}`,
+      `${label} must not be negative; got ${String(value)}`,
     );
   }
   if (value > max) {
     throw new MinecraftBridgeError(
       'invalid-shape',
-      `${label} ${String(value)} 超過上限 ${String(max)}。`,
+      `${label} ${String(value)} is over the limit of ${String(max)}.`,
     );
   }
   return value;
@@ -612,7 +612,7 @@ function assertSides(value: number): number {
   if (!Number.isInteger(value) || value < 3 || value > 12) {
     throw new MinecraftBridgeError(
       'invalid-shape',
-      `邊數必須是 3 到 12 的整數，實際收到：${String(value)}`,
+      `sides must be an integer from 3 to 12; got ${String(value)}`,
     );
   }
   return value;
@@ -620,7 +620,7 @@ function assertSides(value: number): number {
 
 function assertDistinctAxes(first: Axis, second: Axis, label: string): void {
   if (first === second) {
-    throw new MinecraftBridgeError('invalid-shape', `${label}不能是同一個軸（都是 ${first}）。`);
+    throw new MinecraftBridgeError('invalid-shape', `${label} must not be the same axis (both are ${first}).`);
   }
 }
 
@@ -635,7 +635,7 @@ function remainingAxis(first: Axis, second: Axis): Axis {
   for (const axis of AXES) {
     if (axis !== first && axis !== second) return axis;
   }
-  throw new MinecraftBridgeError('invalid-shape', '找不到第三個軸。');
+  throw new MinecraftBridgeError('invalid-shape', 'Could not find the third axis.');
 }
 
 /** 以每個軸各自的偏移量組出座標；軸由參數決定的形狀（wedge／arch／stairs）用它。 */
@@ -717,10 +717,10 @@ interface PathSegment {
 /** 把 XZ 折線攤成線段清單，順便記下累積長度——城垛要靠它知道自己在路徑的第幾格。 */
 function buildPathSegments(points: readonly Vec3[], closed: boolean): PathSegment[] {
   if (points.length < 2) {
-    throw new MinecraftBridgeError('invalid-shape', '折線至少需要 2 個點。');
+    throw new MinecraftBridgeError('invalid-shape', 'A polyline needs at least 2 points.');
   }
   if (points.length > 32) {
-    throw new MinecraftBridgeError('shape-too-large', '折線轉折點上限 32 個。');
+    throw new MinecraftBridgeError('shape-too-large', 'A polyline can have at most 32 points.');
   }
   const ordered = closed ? [...points, points[0]!] : points;
   const segments: PathSegment[] = [];
@@ -736,7 +736,7 @@ function buildPathSegments(points: readonly Vec3[], closed: boolean): PathSegmen
     offset += length;
   }
   if (segments.length === 0) {
-    throw new MinecraftBridgeError('invalid-shape', '折線的所有點重疊，長度為零。');
+    throw new MinecraftBridgeError('invalid-shape', 'All points of the polyline overlap, so its length is zero.');
   }
   return segments;
 }
@@ -788,7 +788,7 @@ function assertPathVolume(bounds: Bounds, segments: number): void {
   if (volume > MAX_PATH_SCAN_VOLUME) {
     throw new MinecraftBridgeError(
       'shape-too-large',
-      `折線形狀的掃描體積 ${String(volume)}（× ${String(segments)} 段）超過上限 ${String(MAX_PATH_SCAN_VOLUME)}；請縮短路徑、降低高度或拆成多段。`,
+      `The polyline scan volume ${String(volume)} (x ${String(segments)} segments) is over the limit of ${String(MAX_PATH_SCAN_VOLUME)}; shorten the path, lower the height or split it into several parts.`,
     );
   }
 }
@@ -840,7 +840,7 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'sphere': {
-      const r = assertPositive(spec.radius, '球半徑', 128);
+      const r = assertPositive(spec.radius, 'sphere.radius', 128);
       const limit = (r + 0.5) * (r + 0.5);
       const span = Math.ceil(r);
       const bounds: Bounds = {
@@ -857,9 +857,9 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'ellipsoid': {
-      const rx = assertPositive(spec.radii.x, 'X 半徑', 128);
-      const ry = assertPositive(spec.radii.y, 'Y 半徑', 128);
-      const rz = assertPositive(spec.radii.z, 'Z 半徑', 128);
+      const rx = assertPositive(spec.radii.x, 'ellipsoid.radii.x', 128);
+      const ry = assertPositive(spec.radii.y, 'ellipsoid.radii.y', 128);
+      const rz = assertPositive(spec.radii.z, 'ellipsoid.radii.z', 128);
       const bounds: Bounds = {
         min: {
           x: spec.center.x - Math.ceil(rx),
@@ -882,8 +882,8 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'cylinder': {
-      const r = assertPositive(spec.radius, '圓柱半徑', 128);
-      const h = assertPositive(spec.height, '圓柱高度', 384);
+      const r = assertPositive(spec.radius, 'cylinder.radius', 128);
+      const h = assertPositive(spec.height, 'cylinder.height', 384);
       const span = Math.ceil(r);
       const height = Math.round(h);
       const limit = (r + 0.5) * (r + 0.5);
@@ -902,9 +902,9 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'cone': {
-      const r = assertPositive(spec.radius, '圓錐底半徑', 128);
-      const h = assertPositive(spec.height, '圓錐高度', 384);
-      const top = assertNonNegative(spec.topRadius, '圓錐頂半徑', 128);
+      const r = assertPositive(spec.radius, 'cone.radius', 128);
+      const h = assertPositive(spec.height, 'cone.height', 384);
+      const top = assertNonNegative(spec.topRadius, 'cone.topRadius', 128);
       const span = Math.ceil(Math.max(r, top));
       const height = Math.round(h);
       const bounds = axialBounds(spec.center, spec.axis, span, height);
@@ -924,9 +924,9 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'pyramid': {
-      const base = assertPositive(spec.baseRadius, '金字塔底半徑', 128);
-      const h = assertPositive(spec.height, '金字塔高度', 384);
-      const top = assertNonNegative(spec.topRadius, '金字塔頂半徑', 128);
+      const base = assertPositive(spec.baseRadius, 'pyramid.baseRadius', 128);
+      const h = assertPositive(spec.height, 'pyramid.height', 384);
+      const top = assertNonNegative(spec.topRadius, 'pyramid.topRadius', 128);
       const sides = assertSides(spec.sides);
       const normals = polygonNormals(sides, spec.rotation);
       const span = polygonExtent(Math.max(base, top), sides, spec.rotation);
@@ -945,7 +945,7 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'disk': {
-      const r = assertPositive(spec.radius, '圓盤半徑', 256);
+      const r = assertPositive(spec.radius, 'disk.radius', 256);
       const span = Math.ceil(r);
       const limit = (r + 0.5) * (r + 0.5);
       const bounds = axialBounds(spec.center, spec.axis, span, 1);
@@ -961,8 +961,8 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'torus': {
-      const major = assertPositive(spec.majorRadius, '環面主半徑', 128);
-      const minor = assertPositive(spec.minorRadius, '環面副半徑', 64);
+      const major = assertPositive(spec.majorRadius, 'torus.majorRadius', 128);
+      const minor = assertPositive(spec.minorRadius, 'torus.minorRadius', 64);
       const spanPlane = Math.ceil(major + minor);
       const spanAlong = Math.ceil(minor);
       const bounds = axialBounds(spec.center, spec.axis, spanPlane, spanAlong * 2 + 1, spanAlong);
@@ -980,14 +980,14 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'helix': {
-      const r = assertPositive(spec.radius, '螺旋半徑', 128);
-      const h = assertPositive(spec.height, '螺旋高度', 384);
-      const turns = assertPositive(spec.turns, '圈數', 64);
-      const thickness = assertPositive(spec.thickness, '線寬', 7);
+      const r = assertPositive(spec.radius, 'helix.radius', 128);
+      const h = assertPositive(spec.height, 'helix.height', 384);
+      const turns = assertPositive(spec.turns, 'helix.turns', 64);
+      const thickness = assertPositive(spec.thickness, 'helix.thickness', 7);
       const height = Math.round(h);
       const steps = Math.max(height * 8, Math.round(turns * 64));
       if (steps > 40_000) {
-        throw new MinecraftBridgeError('shape-too-large', '螺旋取樣點過多；請降低高度或圈數。');
+        throw new MinecraftBridgeError('shape-too-large', 'The helix has too many sample points; lower the height or the number of turns.');
       }
 
       const raw: Vec3[] = [];
@@ -1003,13 +1003,13 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'curve': {
-      const thickness = assertPositive(spec.thickness, '線寬', 7);
+      const thickness = assertPositive(spec.thickness, 'curve.thickness', 7);
       const control = spec.points;
       if (control.length < 2) {
-        throw new MinecraftBridgeError('invalid-shape', '曲線至少需要 2 個控制點。');
+        throw new MinecraftBridgeError('invalid-shape', 'A curve needs at least 2 control points.');
       }
       if (control.length > 64) {
-        throw new MinecraftBridgeError('shape-too-large', '曲線控制點上限 64 個。');
+        throw new MinecraftBridgeError('shape-too-large', 'A curve can have at most 64 control points.');
       }
 
       // Catmull-Rom 需要每段前後各一個額外控制點。開放曲線把端點複製一份當
@@ -1033,7 +1033,7 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
         const steps = Math.max(2, Math.ceil(span * 3));
         sampled += steps;
         if (sampled > 60_000) {
-          throw new MinecraftBridgeError('shape-too-large', '曲線取樣點過多；請減少控制點或縮短距離。');
+          throw new MinecraftBridgeError('shape-too-large', 'The curve has too many sample points; use fewer control points or shorter distances.');
         }
         for (let step = 0; step < steps; step += 1) {
           const t = step / steps;
@@ -1051,22 +1051,22 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     case 'revolution': {
       const profile = spec.profile;
       if (profile.length < 2) {
-        throw new MinecraftBridgeError('invalid-shape', '旋轉體輪廓至少需要 2 個取樣點。');
+        throw new MinecraftBridgeError('invalid-shape', 'A revolution profile needs at least 2 points.');
       }
       if (profile.length > 64) {
-        throw new MinecraftBridgeError('shape-too-large', '旋轉體輪廓點上限 64 個。');
+        throw new MinecraftBridgeError('shape-too-large', 'A revolution profile can have at most 64 points.');
       }
       // 依 along 排序，呼叫端不必自己保證順序；相同 along 會讓內插除以零。
       const sorted = [...profile].sort((left, right) => left.along - right.along);
       for (const point of sorted) {
         if (!Number.isFinite(point.along) || !Number.isFinite(point.radius)) {
-          throw new MinecraftBridgeError('invalid-shape', '旋轉體輪廓含非有限數值。');
+          throw new MinecraftBridgeError('invalid-shape', 'The revolution profile contains a value that is not a finite number.');
         }
         if (point.radius < 0) {
-          throw new MinecraftBridgeError('invalid-shape', '旋轉體半徑不可為負。');
+          throw new MinecraftBridgeError('invalid-shape', 'A revolution radius must not be negative.');
         }
         if (point.radius > 128) {
-          throw new MinecraftBridgeError('shape-too-large', '旋轉體半徑上限 128。');
+          throw new MinecraftBridgeError('shape-too-large', 'A revolution radius can be at most 128.');
         }
       }
       const first = sorted[0]!;
@@ -1074,7 +1074,7 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
       const lowest = Math.round(first.along);
       const highest = Math.round(last.along);
       if (highest - lowest > 384) {
-        throw new MinecraftBridgeError('shape-too-large', '旋轉體高度上限 384。');
+        throw new MinecraftBridgeError('shape-too-large', 'A revolution can be at most 384 high.');
       }
 
       const raw: Vec3[] = [];
@@ -1100,7 +1100,7 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'tube': {
-      const radius = assertPositive(spec.radius, '管半徑', 64);
+      const radius = assertPositive(spec.radius, 'tube.radius', 64);
       const limit = (radius + 0.5) * (radius + 0.5);
       const span = Math.ceil(radius) + 1;
       const bounds: Bounds = {
@@ -1121,7 +1121,7 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'wedge': {
-      assertDistinctAxes(spec.rise, spec.run, '楔形的上升方向與下降方向');
+      assertDistinctAxes(spec.rise, spec.run, 'wedge.rise and wedge.run');
       const min = {
         x: Math.min(spec.from.x, spec.to.x),
         y: Math.min(spec.from.y, spec.to.y),
@@ -1155,11 +1155,11 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'arch': {
-      assertDistinctAxes(spec.span, spec.rise, '拱的跨距方向與上升方向');
-      const radius = assertPositive(spec.radius, '拱內緣半徑', 128);
-      const thickness = assertPositive(spec.thickness, '拱圈厚度', 64);
-      const depth = assertPositiveInteger(spec.depth, '拱進深', 256);
-      const legHeight = assertNonNegative(spec.legHeight, '拱腳高度', 256);
+      assertDistinctAxes(spec.span, spec.rise, 'arch.span and arch.rise');
+      const radius = assertPositive(spec.radius, 'arch.radius', 128);
+      const thickness = assertPositive(spec.thickness, 'arch.thickness', 64);
+      const depth = assertPositiveInteger(spec.depth, 'arch.depth', 256);
+      const legHeight = assertNonNegative(spec.legHeight, 'arch.legHeight', 256);
 
       const depthAxis = remainingAxis(spec.span, spec.rise);
       const inner = radius - 0.5;
@@ -1205,10 +1205,10 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'stairs': {
-      const steps = assertPositiveInteger(spec.steps, '階數', 256);
-      const width = assertPositiveInteger(spec.width, '梯寬', 64);
-      const stepRise = assertPositiveInteger(spec.stepRise, '每階上升', 8);
-      const stepRun = assertPositiveInteger(spec.stepRun, '每階前進', 8);
+      const steps = assertPositiveInteger(spec.steps, 'stairs.steps', 256);
+      const width = assertPositiveInteger(spec.width, 'stairs.width', 64);
+      const stepRise = assertPositiveInteger(spec.stepRise, 'stairs.stepRise', 8);
+      const stepRun = assertPositiveInteger(spec.stepRun, 'stairs.stepRun', 8);
 
       const forward: Axis = spec.direction === 'x+' || spec.direction === 'x-' ? 'x' : 'z';
       const sign = spec.direction === 'x+' || spec.direction === 'z+' ? 1 : -1;
@@ -1220,7 +1220,7 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
       if (estimate > MAX_SCAN_VOLUME) {
         throw new MinecraftBridgeError(
           'shape-too-large',
-          `階梯方塊數估計 ${String(estimate)} 超過上限 ${String(MAX_SCAN_VOLUME)}；請降低階數、梯寬或改成非實心。`,
+          `The estimated stair block count ${String(estimate)} is over the limit of ${String(MAX_SCAN_VOLUME)}; reduce steps or width, or make it not solid.`,
         );
       }
 
@@ -1246,8 +1246,8 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'prism': {
-      const r = assertPositive(spec.radius, '角柱半徑', 128);
-      const h = assertPositive(spec.height, '角柱高度', 384);
+      const r = assertPositive(spec.radius, 'prism.radius', 128);
+      const h = assertPositive(spec.height, 'prism.height', 384);
       const sides = assertSides(spec.sides);
       const normals = polygonNormals(sides, spec.rotation);
       const span = polygonExtent(r, sides, spec.rotation);
@@ -1265,9 +1265,9 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'polywall': {
-      const height = assertPositiveInteger(spec.height, '牆高', 384);
-      const thickness = assertPositiveInteger(spec.thickness, '牆厚', 32);
-      const merlonWidth = assertPositiveInteger(spec.merlonWidth, '城垛寬', 32);
+      const height = assertPositiveInteger(spec.height, 'polywall.height', 384);
+      const thickness = assertPositiveInteger(spec.thickness, 'polywall.thickness', 32);
+      const merlonWidth = assertPositiveInteger(spec.merlonWidth, 'polywall.merlonWidth', 32);
       const segments = buildPathSegments(spec.points, spec.closed);
       const baseY = spec.points[0]!.y;
       const reach = thickness / 2;
@@ -1289,8 +1289,8 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'ribbon': {
-      const width = assertPositive(spec.width, '帶寬', 64);
-      const thickness = assertPositiveInteger(spec.thickness, '厚度', 64);
+      const width = assertPositive(spec.width, 'ribbon.width', 64);
+      const thickness = assertPositiveInteger(spec.thickness, 'ribbon.thickness', 64);
       const segments = buildPathSegments(spec.points, spec.closed);
       const baseY = spec.points[0]!.y;
       const reach = width / 2;
@@ -1313,15 +1313,15 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
       const baseY = Math.min(spec.from.y, spec.to.y);
       const corners = spec.corners;
       for (const [label, value] of [
-        ['西北角高度', corners.nw],
-        ['東北角高度', corners.ne],
-        ['西南角高度', corners.sw],
-        ['東南角高度', corners.se],
+        ['heightfield.corners.nw', corners.nw],
+        ['heightfield.corners.ne', corners.ne],
+        ['heightfield.corners.sw', corners.sw],
+        ['heightfield.corners.se', corners.se],
       ] as const) {
         assertNonNegative(value, label, 384);
       }
-      const amplitude = spec.waves ? assertNonNegative(spec.waves.amplitude, '起伏振幅', 128) : 0;
-      const wavelength = spec.waves ? assertPositive(spec.waves.wavelength, '起伏波長', 512) : 1;
+      const amplitude = spec.waves ? assertNonNegative(spec.waves.amplitude, 'heightfield.waves.amplitude', 128) : 0;
+      const wavelength = spec.waves ? assertPositive(spec.waves.wavelength, 'heightfield.waves.wavelength', 512) : 1;
 
       const spanX = maxX - minX;
       const spanZ = maxZ - minZ;
@@ -1359,13 +1359,13 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'spiralStairs': {
-      const outer = assertPositive(spec.radius, '螺旋梯外半徑', 128);
-      const innerRadius = assertNonNegative(spec.innerRadius, '螺旋梯內半徑', 128);
-      const height = assertPositiveInteger(spec.height, '螺旋梯高度', 384);
-      const turns = assertPositive(spec.turns, '圈數', 64);
-      const stepRise = assertPositiveInteger(spec.stepRise, '每階上升', 8);
+      const outer = assertPositive(spec.radius, 'spiralStairs.radius', 128);
+      const innerRadius = assertNonNegative(spec.innerRadius, 'spiralStairs.innerRadius', 128);
+      const height = assertPositiveInteger(spec.height, 'spiralStairs.height', 384);
+      const turns = assertPositive(spec.turns, 'spiralStairs.turns', 64);
+      const stepRise = assertPositiveInteger(spec.stepRise, 'spiralStairs.stepRise', 8);
       if (innerRadius >= outer) {
-        throw new MinecraftBridgeError('invalid-shape', '螺旋梯的內半徑必須小於外半徑。');
+        throw new MinecraftBridgeError('invalid-shape', 'spiralStairs.innerRadius must be less than spiralStairs.radius.');
       }
 
       const steps = Math.ceil(height / stepRise);
@@ -1403,9 +1403,9 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'cross': {
-      const reach = assertPositive(spec.radius, '十字臂長', 128);
-      const armWidth = assertPositiveInteger(spec.armWidth, '臂寬', 64);
-      const height = assertPositiveInteger(spec.height, '十字柱高度', 384);
+      const reach = assertPositive(spec.radius, 'cross.radius', 128);
+      const armWidth = assertPositiveInteger(spec.armWidth, 'cross.armWidth', 64);
+      const height = assertPositiveInteger(spec.height, 'cross.height', 384);
       const half = (armWidth - 1) / 2;
       const span = Math.ceil(reach);
       const bounds = axialBounds(spec.center, spec.axis, span, height);
@@ -1424,17 +1424,17 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'star': {
-      const outer = assertPositive(spec.outerRadius, '星形外半徑', 128);
-      const inner = assertPositive(spec.innerRadius, '星形內半徑', 128);
-      const height = assertPositiveInteger(spec.height, '星形柱高度', 384);
+      const outer = assertPositive(spec.outerRadius, 'star.outerRadius', 128);
+      const inner = assertPositive(spec.innerRadius, 'star.innerRadius', 128);
+      const height = assertPositiveInteger(spec.height, 'star.height', 384);
       if (!Number.isInteger(spec.points) || spec.points < 3 || spec.points > 12) {
         throw new MinecraftBridgeError(
           'invalid-shape',
-          '星形的角數必須是 3 到 12 的整數，實際收到：' + String(spec.points),
+          'star.points must be an integer from 3 to 12; got ' + String(spec.points),
         );
       }
       if (inner >= outer) {
-        throw new MinecraftBridgeError('invalid-shape', '星形的內半徑必須小於外半徑。');
+        throw new MinecraftBridgeError('invalid-shape', 'star.innerRadius must be less than star.outerRadius.');
       }
 
       const sectors = spec.points * 2;
@@ -1466,7 +1466,7 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
     }
 
     case 'roof': {
-      const height = assertPositiveInteger(spec.height, '屋頂高度', 384);
+      const height = assertPositiveInteger(spec.height, 'roof.height', 384);
       const min = {
         x: Math.min(spec.from.x, spec.to.x),
         y: Math.min(spec.from.y, spec.to.y),
@@ -1478,7 +1478,7 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
         z: Math.max(spec.from.z, spec.to.z),
       };
       if (spec.ridgeAxis === 'y') {
-        throw new MinecraftBridgeError('invalid-shape', '屋脊只能沿 x 或 z 延伸，不能是 y。');
+        throw new MinecraftBridgeError('invalid-shape', 'The roof ridge can only run along x or z, not y.');
       }
 
       const centerX = (min.x + max.x) / 2;
@@ -1517,7 +1517,7 @@ export function generateShape(spec: ShapeSpec): Vec3[] {
 
     default: {
       const exhaustive: never = spec;
-      throw new MinecraftBridgeError('invalid-shape', `未知形狀：${JSON.stringify(exhaustive)}`);
+      throw new MinecraftBridgeError('invalid-shape', `Unknown shape: ${JSON.stringify(exhaustive)}`);
     }
   }
 }

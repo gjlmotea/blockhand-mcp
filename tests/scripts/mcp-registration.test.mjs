@@ -102,13 +102,13 @@ describe('Codex registration classification', () => {
     });
     const outcome = classify(existing);
     expect(outcome.kind).toBe('compatible');
-    expect(outcome.differences).toContain('Node 路徑與目前執行安裝器的 Node 不同');
+    expect(outcome.differences).toContain('Node path differs from the Node running this installer');
   });
 
   it('同一 entry 被停用時不會誤判為可用', () => {
     const outcome = classify(entryWith({ enabled: false }));
     expect(outcome.kind).toBe('blockhand-mismatch');
-    expect(outcome.differences).toContain('entry 已停用');
+    expect(outcome.differences).toContain('entry is disabled');
   });
 
   it('另一個 clone 的 BlockHand entry 會停止，不自動覆寫', () => {
@@ -116,7 +116,7 @@ describe('Codex registration classification', () => {
       entryWith({ transport: { args: ['/Users/other/minecraft-edu/scripts/launch-mcp.mjs'] } }),
     );
     expect(outcome.kind).toBe('blockhand-mismatch');
-    expect(outcome.differences.join('\n')).toContain('其他位置');
+    expect(outcome.differences.join('\n')).toContain('somewhere else');
   });
 
   it('陌生同名 MCP 分類為 foreign', () => {
@@ -155,9 +155,9 @@ describe('Codex registration classification', () => {
     const bare = classify(entryWith({ transport: { command: 'node' } }));
     const missing = classify(entryWith(), false);
     expect(bare.kind).toBe('blockhand-mismatch');
-    expect(bare.differences).toContain('Node command 不是絕對路徑');
+    expect(bare.differences).toContain('Node command is not an absolute path');
     expect(missing.kind).toBe('blockhand-mismatch');
-    expect(missing.differences.join('\n')).toContain('不存在、無法執行');
+    expect(missing.differences.join('\n')).toContain('does not exist, cannot run');
   });
 });
 
@@ -167,7 +167,7 @@ describe('BlockHand CLI argv grammar', () => {
       encoding: 'utf8',
     });
     expect(result.status).toBe(2);
-    expect(result.stderr).toContain('connect 不接受參數');
+    expect(result.stderr).toContain('connect takes no arguments');
   });
 
   it('uninstall --dry-run 不會被誤當成真正移除', () => {
@@ -175,6 +175,6 @@ describe('BlockHand CLI argv grammar', () => {
       encoding: 'utf8',
     });
     expect(result.status).toBe(2);
-    expect(result.stderr).toContain('uninstall 不接受參數');
+    expect(result.stderr).toContain('uninstall takes no arguments');
   });
 });

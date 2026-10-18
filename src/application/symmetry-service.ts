@@ -82,7 +82,7 @@ export async function analyzeSymmetry(
   if (overlaps(region, scratch)) {
     throw new MinecraftBridgeError(
       'invalid-shape',
-      '暫存區與分析區重疊；鏡像副本會覆蓋原始建築。請把 scratch 移到不相交的位置。',
+      'The scratch area overlaps the analyzed region; the mirrored copy would overwrite the original build. Move scratch somewhere that does not overlap.',
     );
   }
 
@@ -98,7 +98,7 @@ export async function analyzeSymmetry(
   if (!saved.ok) {
     throw new MinecraftBridgeError(
       'command-failed',
-      `無法保存分析區（區塊可能未載入）：${saved.statusMessage ?? '未知原因'}`,
+      `Could not save the analyzed region (its chunks may not be loaded): ${saved.statusMessage ?? 'unknown reason'}`,
     );
   }
 
@@ -110,7 +110,7 @@ export async function analyzeSymmetry(
     await run(worldCommands.deleteStructure(SOURCE_STRUCTURE));
     throw new MinecraftBridgeError(
       'command-failed',
-      `無法備份暫存區，已中止且未改動世界：${backedUp.statusMessage ?? '未知原因'}`,
+      `Could not back up the scratch area; stopped without changing the world: ${backedUp.statusMessage ?? 'unknown reason'}`,
     );
   }
 
@@ -125,7 +125,7 @@ export async function analyzeSymmetry(
     if (!mirrored.ok) {
       throw new MinecraftBridgeError(
         'command-failed',
-        `鏡像副本放置失敗：${mirrored.statusMessage ?? '未知原因'}`,
+        `Placing the mirrored copy failed: ${mirrored.statusMessage ?? 'unknown reason'}`,
       );
     }
 

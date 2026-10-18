@@ -209,7 +209,7 @@ export async function runProxy(settings: HubSettings, version: string, wsPort: n
       deliver({
         jsonrpc: '2.0',
         id: message.id,
-        error: { code: -32603, message: `無法連到 Minecraft 中樞 bridge：${detail(failure)}` },
+        error: { code: -32603, message: `Could not reach the shared Minecraft hub bridge: ${detail(failure)}` },
       });
     }
   }

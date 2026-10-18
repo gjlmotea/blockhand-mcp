@@ -117,7 +117,7 @@ describe('MCP 工具面', () => {
     const result = await client.callTool({ name: 'mc_status', arguments: {} });
     const text = (result.content as { type: string; text: string }[])[0]?.text ?? '';
     expect(text).toContain('/connect 127.0.0.1:19131');
-    expect(text).toContain('作弊');
+    expect(text).toContain('cheats on');
   });
 
   it('mc_set_block 送出正確指令', async () => {
@@ -378,7 +378,7 @@ describe('協定漂移的可發現性', () => {
     const fake = createFakeConnection();
     const client = await connect(fake);
     const instructions = client.getInstructions() ?? '';
-    expect(instructions).toContain('空的');
+    expect(instructions).toContain('the spot is empty');
   });
 });
 
@@ -416,7 +416,7 @@ describe('mc_structure 儲存語意', () => {
       },
     });
     const text = (result.content as { type: string; text: string }[])[0]?.text ?? '';
-    expect(text).toContain('世界資料夾');
+    expect(text).toContain('game world folder');
   });
 
   it('存過的名字會記進 mc_status——遊戲沒有列出結構的指令，這是唯一的辦法', async () => {

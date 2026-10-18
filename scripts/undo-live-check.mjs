@@ -89,62 +89,62 @@ const repeated = count =>
   `execute in overworld ${Array.from({ length: count }, () => `if block ${spot(0, 0, 0)} air 0`).join(' ')} run querytarget @p`;
 const probes = [
   { name: 'time-v1', version: 1, command: 'time query daytime',
-    note: '時間查詢基準；與 time-v25 只差 body.version' },
+    note: 'Time query baseline; differs from time-v25 only in body.version' },
   { name: 'query-v1', version: 1, command: 'querytarget @p',
-    note: '基準線：沒有 execute、沒有 v25' },
+    note: 'Baseline: no execute, no v25' },
   { name: 'query-v25', version: 25, command: 'querytarget @p',
-    note: '只改 body.version，指令字串完全相同' },
+    note: 'Only body.version changes; the command string is identical' },
   { name: 'time-v25', version: 25, command: 'time query daytime',
-    note: 'v25 配非 execute 指令；與 query-v25 一起界定「單純換版本」是否就會沉默' },
+    note: 'v25 with a non-execute command; together with query-v25, shows whether changing the version alone makes the game go silent' },
   { name: 'execute-time-v25', version: 25, command: 'execute in overworld run time query daytime',
-    note: '與 time-v25 只差 execute 包裝；與 execute-run-v25 對照 querytarget 的特殊行為' },
+    note: 'Differs from time-v25 only in the execute wrapper; compare with execute-run-v25 for behavior specific to querytarget' },
   { name: 'execute-run-v1', version: 1, command: 'execute in overworld run querytarget @p',
-    note: '舊版本解讀新語法。預期是明確錯誤訊息；若是沉默，沉默就與 v25 無關' },
+    note: 'The old version parsing the new syntax. A clear error message is expected; if it goes silent, the silence has nothing to do with v25' },
   { name: 'execute-run-v25', version: 25, command: 'execute in overworld run querytarget @p',
-    note: '最短的新式 execute，沒有任何條件' },
+    note: 'The shortest new-style execute, with no conditions' },
   { name: 'execute-self-v25', version: 25, command: 'execute in overworld run querytarget @s',
-    note: '只把選擇器換成 @s；@s 在 WebSocket 來源下不一定能解析' },
+    note: 'Only the selector changes, to @s; @s does not always resolve for a WebSocket origin' },
   { name: 'if-block-v25', version: 25, area: true,
     command: `execute in overworld if block ${spot(0, 0, 0)} air 0 run querytarget @p`,
-    note: '單格條件，帶 aux 值 0' },
+    note: 'Single-block condition with aux value 0' },
   { name: 'if-block-noaux-v25', version: 25, area: true,
     command: `execute in overworld if block ${spot(0, 0, 0)} air run querytarget @p`,
-    note: '同上但省略 aux 值，對照 v25 到底接受哪一種' },
+    note: 'Same, without the aux value, to see which form v25 accepts' },
   { name: 'if-blocks-1d-disjoint-v25', version: 25, area: true,
     command: `execute in overworld ${compare(spot(0, 0, 0), spot(1, 0, 0), spot(4, 0, 0))} run querytarget @p`,
-    note: '最小的區域比對：兩格，來源與目的不重疊' },
+    note: 'Smallest region compare: two blocks, source and destination do not overlap' },
   { name: 'if-blocks-1d-overlap-v25', version: 25, area: true,
     command: `execute in overworld ${compare(spot(0, 0, 0), spot(1, 0, 0), spot(1, 0, 0))} run querytarget @p`,
-    note: '同上但來源與目的重疊一格——這正是整區 guard 的形狀' },
+    note: 'Same, but source and destination overlap by one block, which is the shape of the whole-region guard' },
   { name: 'testforblocks-disjoint-v1', version: 1, area: true,
     command: `testforblocks ${spot(0, 0, 0)} ${spot(1, 0, 0)} ${spot(4, 0, 0)} all`,
-    note: '不經 execute、不經 v25 的同一種比對' },
+    note: 'The same compare without execute and without v25' },
   { name: 'testforblocks-overlap-v1', version: 1, area: true,
     command: `testforblocks ${spot(0, 0, 0)} ${spot(1, 0, 0)} ${spot(1, 0, 0)} all`,
-    note: '不經 execute、不經 v25 的重疊比對；能單獨判定重疊是否被拒絕' },
+    note: 'The overlapping compare without execute and without v25; shows on its own whether overlap is rejected' },
   { name: 'guard-2x2x2-v25', version: 25, area: true,
     command: guardUndoRegion({ from, to: { x: x + 1, y: y + 1, z: z + 1 }, block: 'air', blockCount: 8 }, 'querytarget @p'),
-    note: '真正的 guard 形狀（基準格 + 三軸重疊比對），但只有 8 格' },
+    note: 'The real guard shape (base block + overlapping compares on three axes), but only 8 blocks' },
   { name: 'guard-2x2x2-self-v25', version: 25, area: true,
     command: guardUndoRegion({ from, to: { x: x + 1, y: y + 1, z: z + 1 }, block: 'air', blockCount: 8 }, 'querytarget @s'),
-    note: '與 guard-2x2x2 只差選擇器 @s；與 guard-region 只差比對體積（長度與條件數相同）' },
+    note: 'Differs from guard-2x2x2 only in the @s selector, and from guard-region only in the compared volume (same length and condition count)' },
   { name: 'guard-conditions-3-v25', version: 25, area: true, command: repeated(3),
-    note: '條件數／長度軸：三個單格條件' },
+    note: 'Condition count/length axis: three single-block conditions' },
   { name: 'guard-conditions-12-v25', version: 25, area: true, command: repeated(12),
-    note: '條件數／長度軸：十二個單格條件，長度超過實機失敗的那條' },
+    note: 'Condition count/length axis: twelve single-block conditions, longer than the command that failed in the game' },
   { name: 'guard-region-v25', version: 25, area: true,
     command: guardUndoRegion(air, 'querytarget @s'),
-    note: '完全重現實機失敗的那一條整區 guard；請最後才測' },
+    note: 'Exactly the whole-region guard that failed in the game; test it last' },
 ].map((probe, index) => ({ ...probe, order: index + 1 }));
 
 // 讀寫分界必須是啟動時就成立的事實，不是執行時才發現。
 const readOnlyTerminal = /^(?:querytarget|testforblocks?|time query)\b/;
 for (const probe of probes) {
   const terminal = probe.command.includes(' run ') ? probe.command.split(' run ').at(-1) : probe.command;
-  assert(readOnlyTerminal.test(terminal), `probe ${probe.name} 的終端指令不是唯讀：${terminal}`);
+  assert(readOnlyTerminal.test(terminal), `probe ${probe.name} ends in a command that is not read-only: ${terminal}`);
   assert(!/\b(?:fill|setblock|structure|clone|give|summon|kill|tp|teleport)\b/.test(probe.command),
-    `probe ${probe.name} 含有會改動世界的動詞`);
-  assert(probe.command.length <= 1024, `probe ${probe.name} 超過 1024 字元`);
+    `probe ${probe.name} contains a verb that changes the world`);
+  assert(probe.command.length <= 1024, `probe ${probe.name} is longer than 1024 characters`);
 }
 
 /** 逾時後同一條連線不再送出任何 probe：不重播、不自動重試。 */
@@ -152,23 +152,23 @@ let probeHalt = null;
 async function runProbe(name) {
   const probe = probes.find(entry => entry.name === name);
   if (!probe) {
-    emit({ kind: 'probe', ok: false, error: `未知的 probe：${String(name)}`,
+    emit({ kind: 'probe', ok: false, error: `Unknown probe: ${String(name)}`,
       available: probes.map(entry => entry.name) });
     return;
   }
   const connectionCount = wire.status().connectionCount;
   if (probeHalt && probeHalt.connectionCount === connectionCount) {
     emit({ kind: 'probe', probe: probe.name, skipped: true, haltedBy: probeHalt.probe,
-      reason: '同一條連線上已有 probe 逾時；不再送出任何指令。請重新 /connect 後再繼續。' });
+      reason: 'A probe already timed out on this connection, so no more commands are sent. Run /connect again to continue.' });
     return;
   }
   if (probe.area && !argument) {
     emit({ kind: 'probe', probe: probe.name, skipped: true,
-      reason: '這條 probe 會讀取測試區座標，需要啟動時給 --origin=x,y,z。' });
+      reason: 'This probe reads coordinates in the test area; start the script with --origin=x,y,z.' });
     return;
   }
   if (!wire.status().connected) {
-    emit({ kind: 'probe', probe: probe.name, skipped: true, reason: '遊戲尚未連線。' });
+    emit({ kind: 'probe', probe: probe.name, skipped: true, reason: 'The game is not connected yet.' });
     return;
   }
   const result = await base.runCommand(probe.command, { commandVersion: probe.version });

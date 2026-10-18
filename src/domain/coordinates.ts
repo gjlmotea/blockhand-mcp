@@ -7,7 +7,7 @@ const MAX_Y = 320;
 
 function formatComponent(value: number, mode: Coordinate['mode']): string {
   if (!Number.isFinite(value)) {
-    throw new MinecraftBridgeError('invalid-coordinate', `座標分量不是有限數：${String(value)}`);
+    throw new MinecraftBridgeError('invalid-coordinate', `Coordinate component is not a finite number: ${String(value)}`);
   }
 
   if (mode === 'absolute') {
@@ -32,20 +32,20 @@ export function assertPlaceableCoordinate(coordinate: Coordinate, label: string)
   if (coordinate.mode !== 'absolute') return;
 
   if (!Number.isInteger(coordinate.x) || !Number.isInteger(coordinate.y) || !Number.isInteger(coordinate.z)) {
-    throw new MinecraftBridgeError('invalid-coordinate', `${label} 的絕對方塊座標必須是整數。`);
+    throw new MinecraftBridgeError('invalid-coordinate', `Absolute block coordinates of ${label} must be integers.`);
   }
 
   if (Math.abs(coordinate.x) > MAX_ABS_HORIZONTAL || Math.abs(coordinate.z) > MAX_ABS_HORIZONTAL) {
     throw new MinecraftBridgeError(
       'coordinate-out-of-range',
-      `${label} 的水平座標超出世界邊界 ±${String(MAX_ABS_HORIZONTAL)}。`,
+      `Horizontal coordinates of ${label} are outside the world border of +/-${String(MAX_ABS_HORIZONTAL)}.`,
     );
   }
 
   if (coordinate.y < MIN_Y || coordinate.y > MAX_Y) {
     throw new MinecraftBridgeError(
       'coordinate-out-of-range',
-      `${label} 的 Y 座標 ${String(coordinate.y)} 超出可建造範圍 ${String(MIN_Y)}～${String(MAX_Y)}。`,
+      `Y coordinate ${String(coordinate.y)} of ${label} is outside the buildable range ${String(MIN_Y)} to ${String(MAX_Y)}.`,
     );
   }
 }
@@ -69,7 +69,7 @@ export function vec3Key(vector: Vec3): string {
 export function boundingBox(points: readonly Vec3[]): { readonly min: Vec3; readonly max: Vec3 } {
   const first = points[0];
   if (first === undefined) {
-    throw new MinecraftBridgeError('empty-shape', '形狀沒有產生任何方塊。');
+    throw new MinecraftBridgeError('empty-shape', 'The shape produced no blocks.');
   }
 
   let minX = first.x;

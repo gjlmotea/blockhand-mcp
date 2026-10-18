@@ -10,12 +10,12 @@ function failed(commandLine: string, statusMessage: string | null): CommandOutco
 describe('notInWorldHint', () => {
   it('內建指令回「不明的指令」時提示遊戲可能不在世界裡', () => {
     const outcome = failed('time query daytime', '不明的指令：time。請確認該指令是否存在，以及您是否具備使用該指令的權限。');
-    expect(notInWorldHint(outcome)).toContain('不在世界裡');
-    expect(summarizeOutcome(outcome)).toContain('不在世界裡');
+    expect(notInWorldHint(outcome)).toContain('not in a world');
+    expect(summarizeOutcome(outcome)).toContain('not in a world');
   });
 
   it('區域比對（testforblocks）也提示', () => {
-    expect(notInWorldHint(failed('testforblocks 0 0 0 1 1 1 5 5 5', '不明的指令：testforblocks。請確認該指令是否存在，以及您是否具備使用該指令的權限。'))).toContain('不在世界裡');
+    expect(notInWorldHint(failed('testforblocks 0 0 0 1 1 1 5 5 5', '不明的指令：testforblocks。請確認該指令是否存在，以及您是否具備使用該指令的權限。'))).toContain('not in a world');
   });
 
   it('英文語系也認得', () => {

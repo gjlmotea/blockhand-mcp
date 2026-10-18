@@ -29,7 +29,7 @@ describe('assertPlaceableCoordinate', () => {
   it('擋下超出高度的座標', () => {
     expect(() =>
       assertPlaceableCoordinate({ x: 0, y: 5000, z: 0, mode: 'absolute' }, '測試'),
-    ).toThrow(/超出可建造範圍/);
+    ).toThrow(/outside the buildable range/);
   });
 
   it('不檢查相對座標的邊界', () => {
@@ -51,12 +51,12 @@ describe('agentCommands', () => {
   });
 
   it('擋下超出範圍的槽位', () => {
-    expect(() => agentCommands.place(0, 'forward')).toThrow(/1～27/);
-    expect(() => agentCommands.place(28, 'forward')).toThrow(/1～27/);
+    expect(() => agentCommands.place(0, 'forward')).toThrow(/from 1 to 27/);
+    expect(() => agentCommands.place(28, 'forward')).toThrow(/from 1 to 27/);
   });
 
   it('擋下超出範圍的數量', () => {
-    expect(() => agentCommands.drop(1, 65, 'forward')).toThrow(/1～64/);
+    expect(() => agentCommands.drop(1, 65, 'forward')).toThrow(/from 1 to 64/);
   });
 });
 
@@ -88,7 +88,7 @@ describe('worldCommands', () => {
 
   it('拒絕格式錯誤的方塊狀態', () => {
     expect(() => worldCommands.setBlock(ABS, 'stone', 'stone_type=granite', null)).toThrow(
-      /方塊狀態/,
+      /Block states/,
     );
   });
 });
@@ -108,11 +108,11 @@ describe('playerCommands 與 chatCommands', () => {
   });
 
   it('拒絕非法選擇器', () => {
-    expect(() => playerCommands.kill('@x')).toThrow(/選擇器/);
+    expect(() => playerCommands.kill('@x')).toThrow(/selector/);
   });
 
   it('訊息不得含換行', () => {
-    expect(() => chatCommands.say('hello\nkill @a')).toThrow(/換行/);
+    expect(() => chatCommands.say('hello\nkill @a')).toThrow(/newlines/);
   });
 });
 
@@ -134,9 +134,9 @@ describe('assessRawCommand', () => {
   });
 
   it('拒絕會切斷橋接的指令', () => {
-    expect(() => assessRawCommand('/connect evil.example.com:80')).toThrow(/切斷/);
-    expect(() => assessRawCommand('wsserver localhost:1234')).toThrow(/切斷/);
-    expect(() => assessRawCommand('/closewebsocket')).toThrow(/切斷/);
+    expect(() => assessRawCommand('/connect evil.example.com:80')).toThrow(/cut or redirect/);
+    expect(() => assessRawCommand('wsserver localhost:1234')).toThrow(/cut or redirect/);
+    expect(() => assessRawCommand('/closewebsocket')).toThrow(/cut or redirect/);
   });
 
   it('包在 execute 裡的斷線指令也拒絕', () => {
@@ -161,10 +161,10 @@ describe('assessRawCommand', () => {
   });
 
   it('拒絕用換行串接多條指令', () => {
-    expect(() => assessRawCommand('say hi\nkill @a')).toThrow(/單行/);
+    expect(() => assessRawCommand('say hi\nkill @a')).toThrow(/single-line/);
   });
 
   it('拒絕空指令', () => {
-    expect(() => assessRawCommand('   /  ')).toThrow(/不得為空/);
+    expect(() => assessRawCommand('   /  ')).toThrow(/must not be empty/);
   });
 });

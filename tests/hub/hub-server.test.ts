@@ -127,7 +127,7 @@ describe('shared hub', () => {
       arguments: { position: { x: 1, y: 70, z: 1 }, block: 'stone' },
     });
     expect(blocked.isError).toBe(true);
-    expect(text(blocked)).toContain('另一個 AI 對話正在修改世界');
+    expect(text(blocked)).toContain('Another AI session is changing the world');
 
     const read = await second.callTool({ name: 'mc_status', arguments: {} });
     expect(read.isError).toBeFalsy();

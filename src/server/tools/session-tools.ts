@@ -13,38 +13,38 @@ import { batchToPayload, guard, ok, outcomeToPayload, summarizeBatch, summarizeO
 
 /** 連上之後給 AI 的提醒：連著時重打 /connect 遊戲什麼都不顯示，玩家會以為卡住。 */
 const ALREADY_CONNECTED_HINT =
-  '不用再請玩家打 /connect：連著時再打，遊戲不會顯示任何字，玩家容易以為卡住。正常的 /reload all、換世界不會斷線。';
+  ' Do not ask the player to type /connect again: typing it while connected shows no text at all, so the player may think the game is stuck. A normal /reload all or world switch does not disconnect.';
 
 export function registerSessionTools(server: McpServer, service: BlockHandService): void {
   server.registerTool('mc_undo_control', {
-    title:'查看或設定單步復原',
-    description:`注意：自動 Undo 預設關閉。在 Education 1.26.x 上開啟後，第一次建造前的原生檢查會讓遊戲的指令通道永久不回應（玩家打字也沒反應），只能重開 Minecraft；只在使用者明確要求時才 configure enabled=true。action=status 只讀取自動 Undo 狀態與耗時；configure 可開關及調整格數預算（預設${DEFAULT_UNDO_BLOCKS}、上限${MAX_UNDO_BLOCKS}）；依相同材質合併整區保存、原生整區比對。clear 釋放本服務的備份。只使用遊戲 memory，沒有磁碟備份或 Redo。關閉自動備份會清除舊歷史。`,
+    title:'View or configure one-step undo',
+    description:`Note: automatic Undo is off by default. On Education 1.26.x, once it is on, the native check before the first build makes the game command channel stop responding for good (the player's typing gets no response either) until Minecraft is restarted; configure enabled=true only when the user explicitly asks for it. action=status only reads the automatic Undo state and timings; configure turns it on or off and sets the block budget (default ${DEFAULT_UNDO_BLOCKS}, max ${MAX_UNDO_BLOCKS}); same-material ranges are saved as whole regions and compared with native region checks. clear releases this server's backups. Backups live only in game memory, with no disk backup and no Redo. Turning automatic backup off clears the old history.`,
     inputSchema:z.object({action:z.enum(['status','configure','clear']).default('status'),enabled:z.boolean().optional(),maxBlocks:z.number().int().min(1).max(MAX_UNDO_BLOCKS).optional()}).strict(),
     outputSchema:undoStatusSchema(),
     annotations:{readOnlyHint:false,idempotentHint:true,destructiveHint:true,openWorldHint:false},
   },async({action,enabled,maxBlocks})=>guard(async()=>{
-    if(!service.undo) throw new Error('此執行環境未配置 Undo。');
-    if(action!=='configure'&&(enabled!==undefined||maxBlocks!==undefined)) throw new Error('enabled/maxBlocks 只適用於 configure。');
+    if(!service.undo) throw new Error('Undo is not configured in this runtime.');
+    if(action!=='configure'&&(enabled!==undefined||maxBlocks!==undefined)) throw new Error('enabled/maxBlocks apply only to configure.');
     const result=action==='status'?service.undo.status():await service.undo.configure(enabled,maxBlocks,action==='clear');
-    return ok({...result},result.reason??`Undo ${result.enabled?'已開啟':'已停用'}，目前${result.available?'可復原':'沒有可直接復原的操作'}。`);
+    return ok({...result},result.reason??`Undo is ${result.enabled?'on':'off'}; ${result.available?'an operation can be undone':'there is no operation that can be undone directly'}.`);
   }));
   server.registerTool('mc_undo', {
-    title:'復原上一次建造',
-    description:'復原最後一次受保護的 setblock/fill 或建造工具呼叫；多條建造指令算一步。先檢查所有目標方塊，再逐區以條件指令還原，避免覆蓋後來的修改。operationId 可防止復原錯誤版本。overwriteChanges 只在使用者明確要求覆蓋衝突或接受不確定操作的現場復原時使用，不能自動設為true。第一版只有主世界基本建材，不含生物、背包、區域外水流/機關連鎖或 Redo；操作期間請勿切換世界/維度。',
+    title:'Undo the last build',
+    description:'Undo the last protected setblock/fill or build tool call; several build commands count as one step. All target blocks are checked first, then each region is restored with conditional commands so later changes are not overwritten. operationId guards against undoing the wrong version. Use overwriteChanges only when the user explicitly asks to overwrite conflicts, or accepts restoring the site after an operation whose outcome is uncertain; never set it to true on your own. This first version covers basic Overworld building blocks only: no mobs, inventories, water flow or redstone chains outside the region, and no Redo. Do not switch worlds or dimensions while it runs.',
     inputSchema:z.object({operationId:z.string().min(1).optional(),overwriteChanges:z.boolean().default(false)}).strict(),
     outputSchema:undoStatusSchema(),
     annotations:{readOnlyHint:false,idempotentHint:false,destructiveHint:true,openWorldHint:false},
   },async({operationId,overwriteChanges})=>guard(async()=>{
-    if(!service.undo) throw new Error('此執行環境未配置 Undo。');
+    if(!service.undo) throw new Error('Undo is not configured in this runtime.');
     const result=await service.undo.undo(operationId,overwriteChanges);
-    return ok({...result},result.reason??'復原完成。');
+    return ok({...result},result.reason??'Undo finished.');
   }));
   server.registerTool(
     'mc_status',
     {
-      title: '讀取橋接與連線狀態',
+      title: 'Read bridge and connection status',
       description:
-        '回報 WebSocket 橋接、遊戲指令回應狀態（commandState）、最近回覆／逾時時間、/connect 指令與已訂閱事件。connected 只代表網路連線；timed-out 表示最近有指令未回覆，不能據此假定遊戲仍可執行操作。無副作用。',
+        'Report the WebSocket bridge, whether the game is answering commands (commandState), the last reply and timeout times, the /connect command and subscribed events. connected only means the network link is up; timed-out means a recent command got no reply, so do not assume the game can still act. No side effects.',
       inputSchema: z.object({}).strict(),
       outputSchema: connectionStatusSchema(),
       annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
@@ -57,12 +57,12 @@ export function registerSessionTools(server: McpServer, service: BlockHandServic
           { ...status, savedStructures: saved, ...(service.undo ? {undo: {...service.undo.status()}} : {}) },
           status.connected
             ? (status.commandState === 'timed-out'
-                ? '網路已連上，但最近指令未獲回覆；尚未確認遊戲可執行操作。'
-                : `已連線（第 ${String(status.connectionCount)} 次），累計送出 ${String(status.commandsIssued)} 條指令。${ALREADY_CONNECTED_HINT}`) +
+                ? 'The network link is up, but a recent command got no reply; it is not confirmed that the game can act.'
+                : `Connected (connection #${String(status.connectionCount)}), ${String(status.commandsIssued)} commands sent so far.${ALREADY_CONNECTED_HINT}`) +
               (saved.length === 0
                 ? ''
-                : `本次存過的結構：${saved.map((entry) => `${entry.name}（${entry.saveMode}）`).join('、')}。`)
-            : `尚未連線。請在 Minecraft Education 聊天列輸入：${status.connectCommand}（世界必須開啟作弊／Cheats）。`,
+                : ` Structures saved this session: ${saved.map((entry) => `${entry.name} (${entry.saveMode})`).join(', ')}.`)
+            : `Not connected. Type this in the Minecraft Education chat: ${status.connectCommand} (the world must have cheats on).`,
         );
       }),
   );
@@ -70,9 +70,9 @@ export function registerSessionTools(server: McpServer, service: BlockHandServic
   server.registerTool(
     'mc_await_connection',
     {
-      title: '等待 Minecraft 連入',
+      title: 'Wait for Minecraft to connect',
       description:
-        '阻塞等待遊戲連上橋接，最多等 timeoutSeconds 秒。逾時不算錯誤，只是回報 connected=false。適合在請使用者輸入 /connect 之後呼叫。',
+        'Block until the game connects to the bridge, for at most timeoutSeconds seconds. A timeout is not an error; it just reports connected=false. Call it after asking the user to type /connect.',
       inputSchema: z
         .object({ timeoutSeconds: z.number().int().min(1).max(120).default(30) })
         .strict(),
@@ -86,9 +86,9 @@ export function registerSessionTools(server: McpServer, service: BlockHandServic
           { ...status, savedStructures: service.savedStructures(), ...(service.undo ? {undo: {...service.undo.status()}} : {}) },
           status.connected
             ? status.commandState === 'timed-out'
-              ? '網路已連上，但最近指令未獲回覆；請先確認遊戲畫面與回應狀態。'
-              : `Minecraft 已連上橋接。${ALREADY_CONNECTED_HINT}`
-            : `等待 ${String(timeoutSeconds)} 秒後仍未連上。請確認遊戲內已輸入 ${status.connectCommand}，且世界開啟了作弊。`,
+              ? 'The network link is up, but a recent command got no reply; check the game screen and response state first.'
+              : `Minecraft is connected to the bridge.${ALREADY_CONNECTED_HINT}`
+            : `Still not connected after ${String(timeoutSeconds)} seconds. Check that ${status.connectCommand} was typed in the game and that the world has cheats on.`,
         );
       }),
   );
@@ -96,12 +96,12 @@ export function registerSessionTools(server: McpServer, service: BlockHandServic
   server.registerTool(
     'mc_run_command',
     {
-      title: '執行單一 slash 指令',
+      title: 'Run one slash command',
       description:
-        '送出一條原始 slash 指令，涵蓋本 server 沒有專用工具的功能。只接受單行、不得換行串接，並拒絕 wsserver／connect／closewebsocket，包括包在 execute 裡的（那會切斷本橋接）。前導斜線可有可無。',
+        'Send one raw slash command, for anything this server has no dedicated tool for. Single line only, no newline chaining. Refuses wsserver / connect / closewebsocket, including when wrapped in execute (that would cut this bridge). The leading slash is optional.',
       inputSchema: z
         .object({
-          command: z.string().min(1).max(1024).describe('例如 "time set day" 或 "/give @s diamond 1"'),
+          command: z.string().min(1).max(1024).describe('For example "time set day" or "/give @s diamond 1"'),
         })
         .strict(),
       outputSchema: commandOutcomeSchema().extend({ risk: z.string() }).strict(),
@@ -121,9 +121,9 @@ export function registerSessionTools(server: McpServer, service: BlockHandServic
   server.registerTool(
     'mc_run_commands',
     {
-      title: '依序執行多條 slash 指令',
+      title: 'Run several slash commands in order',
       description:
-        '照順序送出多條原始指令，每條都各自通過政策檢查。適合手動編排的巨集；大量方塊請改用 mc_build_shape 或 mc_build_blueprint，它們會自動合併成最少的 fill。',
+        'Send several raw commands in order; each one passes the command policy on its own. Good for hand-written macros; for many blocks use mc_build_shape or mc_build_blueprint, which merge them into the fewest fill commands automatically.',
       inputSchema: z
         .object({
           commands: z.array(z.string().min(1).max(1024)).min(1).max(200),
@@ -133,8 +133,8 @@ export function registerSessionTools(server: McpServer, service: BlockHandServic
             .boolean()
             .default(false)
             .describe(
-              '只回傳失敗的那幾條，成功的略過。大批次（例如 200 條 fill）的逐條結果動輒上萬 token，' +
-                '而且多半只是「已填滿 N 個方塊」；批次很大又不需要逐條數字時開這個。issued／succeeded／failed 的統計不受影響。',
+              'Return only the failed commands and skip the successful ones. Per-command results of a large batch (for example 200 fill commands) easily run past ten thousand tokens, ' +
+                'and most of them just say "N blocks filled"; turn this on for large batches when you do not need each number. The issued / succeeded / failed counts are not affected.',
             ),
         })
         .strict(),
@@ -150,7 +150,7 @@ export function registerSessionTools(server: McpServer, service: BlockHandServic
         const reported = reportFailuresOnly
           ? { ...batch, outcomes: batch.outcomes.filter((outcome) => !outcome.ok) }
           : batch;
-        return ok(batchToPayload(reported), summarizeBatch(batch, '批次指令'));
+        return ok(batchToPayload(reported), summarizeBatch(batch, 'Command batch'));
       }),
   );
 }

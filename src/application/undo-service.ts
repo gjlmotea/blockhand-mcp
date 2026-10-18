@@ -22,7 +22,7 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
   let enabled = options.enabled ?? true;
   let maxBlocks = options.maxBlocks ?? DEFAULT_UNDO_BLOCKS;
   if (!Number.isInteger(maxBlocks) || maxBlocks < 1 || maxBlocks > MAX_UNDO_BLOCKS) {
-    throw new MinecraftBridgeError('undo-invalid-budget', `Undo 格數上限必須介於 1 與 ${MAX_UNDO_BLOCKS}。`);
+    throw new MinecraftBridgeError('undo-invalid-budget', `The Undo block limit must be between 1 and ${MAX_UNDO_BLOCKS}.`);
   }
   let entry: Entry | null = null;
   let busy = false;
@@ -38,7 +38,7 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
   }
   function status(): UndoStatus {
     if (entry && entry.epoch !== epoch()) {
-      entry.state='invalidated'; reason='連線已改變，舊還原點不再適用；請清除舊歷史。';
+      entry.state='invalidated'; reason='The connection changed, so the old restore point no longer applies; clear the old history.';
     }
     return {
       enabled, maxBlocks, maxRegions: MAX_UNDO_REGIONS,
@@ -52,7 +52,7 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
     };
   }
   function exclusive<T>(work: () => Promise<T>): Promise<T> {
-    if (busy || closing) return Promise.reject(new MinecraftBridgeError('undo-busy', '有操作正在執行或服務正在關閉；請先查看 mc_undo_control 的 status。'));
+    if (busy || closing) return Promise.reject(new MinecraftBridgeError('undo-busy', 'An operation is running or the server is shutting down; check status with mc_undo_control first.'));
     busy=true;
     const pending=work().finally(()=>{busy=false;});
     running=pending.catch(()=>{});
@@ -65,7 +65,7 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
   function sameSession(expected: string): void {
     if (epoch() !== expected) {
       if(entry) entry.state='invalidated';
-      throw new MinecraftBridgeError('undo-session-changed', '遊戲連線已變動，已停止操作；不會在新連線重播還原。');
+      throw new MinecraftBridgeError('undo-session-changed', 'The game connection changed, so the operation stopped; the restore will not be replayed on the new connection.');
     }
   }
   async function dimension(expectedEpoch: string): Promise<number> {
@@ -78,12 +78,12 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
       if(result.ok && Array.isArray(rows) && rows.length===1 && typeof rows[0]?.dimension === 'number') return rows[0].dimension as number;
     } catch { /* A missing world context must not become an assumed overworld. */ }
     if(!result.ok && result.statusCode===null) {
-      throw new MinecraftBridgeError('undo-context-no-reply', `查詢指令發起者的維度時遊戲沒有回覆（${result.statusMessage ?? '原因不明'}），未執行可復原的修改。`);
+      throw new MinecraftBridgeError('undo-context-no-reply', `The game did not reply when asked for the command source dimension (${result.statusMessage ?? 'reason unknown'}); no undoable change was made.`);
     }
-    throw new MinecraftBridgeError('undo-context-unknown', '讀不到指令發起者的維度，未執行可復原的修改。');
+    throw new MinecraftBridgeError('undo-context-unknown', 'Could not read the command source dimension; no undoable change was made.');
   }
   async function requireContext(target: Entry): Promise<void> {
-    if(await dimension(target.epoch) !== target.dimension) throw new MinecraftBridgeError('undo-dimension-changed', '玩家已切換維度；請回到原維度再復原。');
+    if(await dimension(target.epoch) !== target.dimension) throw new MinecraftBridgeError('undo-dimension-changed', 'The player switched dimensions; go back to the original dimension before undoing.');
   }
   async function checked(command: string, expectedEpoch: string, native = false): Promise<CommandOutcome> {
     sameSession(expectedEpoch);
@@ -92,7 +92,7 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
     return result;
   }
   function requireSuccess(result: CommandOutcome, stage: string): void {
-    if(!result.ok) throw new MinecraftBridgeError('undo-command-failed', `${stage}失敗：${result.statusMessage ?? '遊戲沒有確認結果'}。`);
+    if(!result.ok) throw new MinecraftBridgeError('undo-command-failed', `${stage} failed: ${result.statusMessage ?? 'the game did not confirm the result'}.`);
   }
   async function ensureNativeChecks(expectedEpoch: string, first: UndoRegion): Promise<void> {
     if (nativeChecksEpoch === expectedEpoch) return;
@@ -104,14 +104,14 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
     if (!result.ok && result.statusCode === -2147352576) {
       result = await checked(`${prefix} unless block ${p} ${first.block} 0 run querytarget @s`, expectedEpoch, true);
     }
-    requireSuccess(result, '原生整區檢查能力確認（未施工；需支援 command version 25）');
+    requireSuccess(result, 'Checking native whole-region support (nothing built; needs command version 25)');
     nativeChecksEpoch = expectedEpoch;
   }
   async function release(): Promise<void> {
     if(!entry) return;
     // Unique names belong only to this process. Never touch manually saved structures.
     const currentEpoch=epoch();
-    if(currentEpoch==='disconnected') throw new MinecraftBridgeError('undo-cleanup-disconnected', '尚未連線，無法確認備份已釋放；保留歷史，未開始新的修改。');
+    if(currentEpoch==='disconnected') throw new MinecraftBridgeError('undo-cleanup-disconnected', 'Not connected, so it cannot confirm the backups were released; the history is kept and no new change was started.');
     entry.state='cleanup-required';
     while(entry.snapshots.length) {
       const snapshot=entry.snapshots[0]!;
@@ -120,7 +120,7 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
       const absent = result.statusCode === -2147352576
         && result.statusMessage?.includes(snapshot.name)
         && /找不到|未找到|不存在|could not be found|not found|cannot find/i.test(result.statusMessage);
-      if (!absent) requireSuccess(result,'釋放舊備份');
+      if (!absent) requireSuccess(result,'Releasing the old backup');
       entry.snapshots.shift();
     }
     entry=null;
@@ -134,18 +134,18 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
     const plan=enabled ? planUndo(commands,maxBlocks) : null;
     status();
     if(entry && ['uncertain','partial','invalidated','cleanup-required'].includes(entry.state)) {
-      throw new MinecraftBridgeError('undo-recovery-required', '上一筆操作尚待復原或清除；未覆寫其備份。請先查看 mc_undo_control。');
+      throw new MinecraftBridgeError('undo-recovery-required', 'The previous operation still needs to be undone or cleared; its backup was not overwritten. Check mc_undo_control first.');
     }
     // Unmanaged mutations cannot leave an older edit labelled "the last step".
     if(!plan) {
       if(entry) await release();
-      reason=enabled ? '這次操作不在自動 Undo 範圍，沒有可復原歷史。' : '自動 Undo 已停用。';
+      reason=enabled ? 'This operation is outside automatic Undo, so there is no history to undo.' : 'Automatic Undo is off.';
       const result=await base.runSequence(commands,sequence);
       return { ...result, undo: completedStatus() };
     }
     const currentEpoch=epoch();
     const currentDimension=await dimension(currentEpoch);
-    if(currentDimension!==0) throw new MinecraftBridgeError('undo-dimension-unsupported','第一版自動 Undo 只支援主世界；尚未修改方塊。');
+    if(currentDimension!==0) throw new MinecraftBridgeError('undo-dimension-unsupported','This first version of automatic Undo supports only the Overworld; no blocks were changed.');
     const id=randomUUID().replaceAll('-','');
     // Validate all guarded restore commands before any save/delete/write.
     const snapshots=plan.regions.map((region,i)=>({region,name:`bhundo_${id}_${i}`,restored:false}));
@@ -153,7 +153,7 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
     await ensureNativeChecks(currentEpoch, snapshots[0]!.region);
     await release();
     entry={id,epoch:currentEpoch,dimension:currentDimension,snapshots:[],state:'uncertain'};
-    reason='正在保存施工前的方塊。'; backupMs=0; checkMs=0; restoreMs=0;
+    reason='Saving the blocks before building.'; backupMs=0; checkMs=0; restoreMs=0;
     const backupStart=performance.now();
     try {
       for(const s of snapshots) {
@@ -161,13 +161,13 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
         entry.snapshots.push(s);
         const save=worldCommands.saveStructure(s.name,{...s.region.from,mode:'absolute'},{...s.region.to,mode:'absolute'},false,'memory');
         const result=await checked(`execute in overworld run ${save}`,currentEpoch,true);
-        requireSuccess(result,'施工前備份');
+        requireSuccess(result,'Backup before building');
       }
       backupMs=Math.round(performance.now()-backupStart);
     } catch(error) {
       backupMs=Math.round(performance.now()-backupStart);
       if(entry) entry.state='cleanup-required';
-      reason='備份沒有全部成功，施工指令一條也未送出；保留可能已配置的備份供清理。';
+      reason='Not every backup succeeded, so no build command was sent; any backups already made are kept for cleanup.';
       throw error;
     }
     const outcomes: CommandOutcome[]=[];
@@ -178,15 +178,15 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
         const result={...wireResult, commandLine:command};
         outcomes.push(result);
         const noop=!result.ok && result.statusCode===-2147352576 && result.data?.['fillCount']===0 && /^fill\b/.test(command);
-        if(!result.ok && !noop) { reason='施工回覆失敗或不確定，已停止後續指令並保留原貌備份。'; break; }
+        if(!result.ok && !noop) { reason='A build reply failed or was uncertain; the remaining commands were stopped and the backup of the original state is kept.'; break; }
         if(sequence.delayMs>0) await new Promise(resolve=>setTimeout(resolve,sequence.delayMs));
       }
       const complete=outcomes.length===commands.length && outcomes.every(r=>r.ok || r.statusCode===-2147352576&&r.data?.['fillCount']===0&&/^fill\b/.test(r.commandLine));
       entry.state=complete?'ready':'uncertain';
-      if(complete) reason='已保留這次完整操作的單步備份；mc_undo 會先檢查後續修改。';
+      if(complete) reason='A one-step backup of this whole operation is kept; mc_undo checks for later changes first.';
     } catch(error) {
       if(entry && entry.state!=='invalidated') entry.state='uncertain';
-      reason='施工被中斷，保留原貌備份；不自動重送。';
+      reason='The build was interrupted; the backup of the original state is kept and nothing is resent automatically.';
       throw error;
     }
     const succeeded=outcomes.filter(r=>r.ok).length;
@@ -197,20 +197,20 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
   const undo: UndoController = {
     status,
     configure: (nextEnabled,nextMax,clear=false)=>exclusive(async()=>{
-      if(nextMax!==undefined && (!Number.isInteger(nextMax)||nextMax<1||nextMax>MAX_UNDO_BLOCKS)) throw new MinecraftBridgeError('undo-invalid-budget',`Undo 格數上限必須介於 1 與 ${MAX_UNDO_BLOCKS}。`);
+      if(nextMax!==undefined && (!Number.isInteger(nextMax)||nextMax<1||nextMax>MAX_UNDO_BLOCKS)) throw new MinecraftBridgeError('undo-invalid-budget',`The Undo block limit must be between 1 and ${MAX_UNDO_BLOCKS}.`);
       if(clear || nextEnabled===false || nextMax!==undefined&&nextMax<status().storedBlocks) await release();
       if(nextEnabled!==undefined) enabled=nextEnabled;
       if(nextMax!==undefined) maxBlocks=nextMax;
-      reason=entry?reason:enabled?'自動單步備份已開啟。':'自動備份已關閉，舊歷史已清除。';
+      reason=entry?reason:enabled?'Automatic one-step backup is on.':'Automatic backup is off and the old history was cleared.';
       return completedStatus();
     }),
     undo: (operationId,overwriteChanges=false)=>exclusive(async()=>{
       status();
       const target=entry;
-      if(!target) throw new MinecraftBridgeError('undo-empty','沒有可復原的操作。');
-      if(operationId!==undefined&&target.id!==operationId) throw new MinecraftBridgeError('undo-stale-id','還原點已被另一筆操作取代；未修改世界。');
-      if(target.state==='invalidated'||target.state==='cleanup-required') throw new MinecraftBridgeError('undo-unavailable','這筆備份不再適用或不完整，不能執行 Undo。');
-      if(target.state==='uncertain'&&!overwriteChanges) throw new MinecraftBridgeError('undo-uncertain','上一筆施工結果不確定；請先檢查現場。只有明確接受覆蓋目前方塊時才可使用 overwriteChanges。');
+      if(!target) throw new MinecraftBridgeError('undo-empty','There is no operation to undo.');
+      if(operationId!==undefined&&target.id!==operationId) throw new MinecraftBridgeError('undo-stale-id','The restore point was replaced by another operation; the world was not changed.');
+      if(target.state==='invalidated'||target.state==='cleanup-required') throw new MinecraftBridgeError('undo-unavailable','This backup no longer applies or is incomplete, so Undo cannot run.');
+      if(target.state==='uncertain'&&!overwriteChanges) throw new MinecraftBridgeError('undo-uncertain','The result of the previous build is uncertain; inspect the site first. Use overwriteChanges only when overwriting the current blocks is explicitly accepted.');
       await requireContext(target);
       const remaining=target.snapshots.filter(s=>!s.restored);
       const checkStart=performance.now();
@@ -218,7 +218,7 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
         const result=await checked(guardUndoRegion(s.region,'querytarget @s'),target.epoch,true);
         if(!result.ok) {
           checkMs=Math.round(performance.now()-checkStart);
-          reason='方塊已改變，或檢查無法完成；這次尚未開始還原，沒有覆蓋現場。';
+          reason='Blocks have changed, or the check could not finish; the restore did not start and nothing was overwritten.';
           throw new MinecraftBridgeError('undo-conflict',reason);
         }
       }
@@ -230,7 +230,7 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
           const result=await checked(overwriteChanges?`execute in overworld run ${load}`:guardUndoRegion(s.region,load),target.epoch,true);
           if(!result.ok) {
             target.state=result.statusCode===null?'uncertain':'partial';
-            reason='還原中途停止；已還原區域不會重送，其餘備份保留。';
+            reason='The restore stopped partway; regions already restored will not be resent, and the remaining backups are kept.';
             throw new MinecraftBridgeError('undo-restore-failed',reason);
           }
           s.restored=true;
@@ -240,7 +240,7 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
         if(!confirmedFailure && status().state!=='invalidated') target.state='uncertain';
         throw error;
       } finally { restoreMs=Math.round(performance.now()-restoreStart); }
-      reason='上一筆操作已復原；第一版不保留 Redo。';
+      reason='The previous operation was undone; this first version keeps no Redo.';
       await release();
       return completedStatus();
     }),
@@ -254,7 +254,7 @@ export function createUndoConnection(base: MinecraftConnection, options: { enabl
       return exclusive(async()=>{
         const batch=await execute([command],{stopOnError:true,delayMs:0});
         const result=batch.outcomes[0];
-        if(!result) throw new MinecraftBridgeError('undo-no-command-outcome','遊戲沒有回報施工結果。');
+        if(!result) throw new MinecraftBridgeError('undo-no-command-outcome','The game did not report the build result.');
         return {...result,undo:batch.undo!};
       });
     },

@@ -21,8 +21,8 @@ export function registerResources(server: McpServer, service: BlockHandService):
     'connection',
     'minecraft-edu://connection',
     {
-      title: '橋接連線狀態',
-      description: '目前的監聽位址、連線狀態與遊戲內要輸入的 /connect 指令。',
+      title: 'Bridge connection status',
+      description: 'The current listening address, connection state and the /connect command to type in the game.',
       mimeType: 'application/json',
     },
     async (uri: URL) => jsonContents(uri, service.status()),
@@ -32,23 +32,23 @@ export function registerResources(server: McpServer, service: BlockHandService):
     'capabilities',
     'minecraft-edu://capabilities',
     {
-      title: 'BlockHand 能力清單',
-      description: '這個 server 支援的 Agent 方向、形狀種類與可訂閱事件。',
+      title: 'BlockHand capabilities',
+      description: 'The Agent directions, shape kinds and subscribable events this server supports.',
       mimeType: 'application/json',
     },
     async (uri: URL) =>
       jsonContents(uri, {
         target: 'Minecraft Education Edition',
         transport: 'websocket-bridge',
-        officialInterface: '/connect（wsserver）',
+        officialInterface: '/connect (wsserver)',
         agentDirections: AGENT_DIRECTIONS,
         shapeKinds: SHAPE_KINDS,
         knownEventNames: service.knownEventNames(),
         limitations: [
-          '需要世界開啟作弊（Cheats），否則所有指令都會被拒絕。',
-          '遊戲是 WebSocket client，必須由玩家在聊天列輸入 /connect 主動連入。',
-          'Agent 是 Education Edition 專屬功能，一般 Bedrock 版沒有。',
-          '事件名稱與 agent 子指令未經 Mojang 正式文件化，版本更新可能改變行為。',
+          'The world must have cheats on, or every command is rejected.',
+          'The game is the WebSocket client; the player must type /connect in chat to connect.',
+          'The Agent exists only in Education Edition, not in regular Bedrock Edition.',
+          'Event names and agent subcommands are not formally documented by Mojang; game updates may change their behavior.',
         ],
       }),
   );

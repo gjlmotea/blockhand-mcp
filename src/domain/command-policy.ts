@@ -73,25 +73,25 @@ function breakingInsideExecute(commandLine: string): string | undefined {
  */
 export function assessRawCommand(input: string): CommandAssessment {
   if (input.includes('\0')) {
-    throw new MinecraftBridgeError('invalid-command', '指令不得包含 NUL 字元。');
+    throw new MinecraftBridgeError('invalid-command', 'The command must not contain NUL characters.');
   }
 
   if (/[\n\r]/.test(input)) {
     throw new MinecraftBridgeError(
       'invalid-command',
-      '一次只接受單行指令；請分次呼叫，不要用換行串接多條指令。',
+      'Only one single-line command is accepted per call; make separate calls instead of chaining commands with newlines.',
     );
   }
 
   const normalized = input.trim().replace(/^\/+/, '').trim();
   if (normalized === '') {
-    throw new MinecraftBridgeError('invalid-command', '指令不得為空。');
+    throw new MinecraftBridgeError('invalid-command', 'The command must not be empty.');
   }
 
   if (normalized.length > 1024) {
     throw new MinecraftBridgeError(
       'invalid-command',
-      `指令長度 ${String(normalized.length)} 超過上限 1024。`,
+      `The command is ${String(normalized.length)} characters long, over the limit of 1024.`,
     );
   }
 
@@ -101,8 +101,8 @@ export function assessRawCommand(input: string): CommandAssessment {
   if (breaking !== undefined) {
     throw new MinecraftBridgeError(
       'command-forbidden',
-      `拒絕執行 ${breaking}：這會切斷或改指向本 MCP 的 WebSocket 橋接，之後所有工具都會失效。` +
-        '需要換連線目標時請由使用者自己在遊戲內輸入。',
+      `Refused to run ${breaking}: it would cut or redirect this MCP server's WebSocket bridge, and every tool would stop working afterwards. ` +
+        'To connect somewhere else, the user has to type it in the game themselves.',
     );
   }
 

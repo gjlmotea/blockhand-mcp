@@ -48,7 +48,7 @@ export function createFakeConnection(options?: { readonly connected?: boolean })
       // 訊息刻意比照 ws-minecraft-connection，讓測試驗到的是真實契約。
       throw new MinecraftBridgeError(
         'not-connected',
-        'Minecraft 尚未連上。請在遊戲聊天列輸入：/connect 127.0.0.1:19131（世界需開啟作弊／Cheats）。',
+        'Minecraft is not connected. Type this in the game chat: /connect 127.0.0.1:19131 (the world must have cheats on).',
       );
     }
   }
