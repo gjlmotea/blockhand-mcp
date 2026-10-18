@@ -1,0 +1,36 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.gjlmotea/blockhand-for-minecraft-education-mcp",
+  "title": "BlockHand",
+  "description": "Minecraft Education Edition MCP server: Agent robot, 24 build shapes, events. No add-on needed.",
+  "websiteUrl": "https://github.com/gjlmotea/blockhand-mcp",
+  "repository": {
+    "url": "https://github.com/gjlmotea/blockhand-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@gjlmotea/blockhand-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "MINECRAFT_EDU_WS_PORT",
+          "description": "Port the game connects to with /connect (default 19131, shared by all AI sessions)",
+          "isRequired": false,
+          "format": "number"
+        },
+        {
+          "name": "MINECRAFT_EDU_WS_HOST",
+          "description": "Listen address (default 127.0.0.1, loopback only)",
+          "isRequired": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

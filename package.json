@@ -1,22 +1,56 @@
 {
-  "name": "@vibe/minecraft-edu-mcp",
+  "name": "@gjlmotea/blockhand-mcp",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
-  "description": "BlockHand（積木之手）：透過 Minecraft Education 的 /wsserver 連線命令提供 Agent 動作、世界讀寫、幾何建造、事件訂閱與受控指令的 MCP server。",
+  "description": "BlockHand: MCP server for Minecraft Education Edition over the official /connect (/wsserver) WebSocket. No add-on or behavior pack needed. Agent robot control, 24 build shapes merged into minimal /fill commands, block reading, region comparison and game events.",
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "minecraft",
+    "minecraft-education",
+    "minecraft-education-edition",
+    "education-edition",
+    "wsserver",
+    "websocket",
+    "agent",
+    "code-builder",
+    "classroom",
+    "edtech",
+    "building",
+    "claude",
+    "claude-code",
+    "codex",
+    "gemini-cli",
+    "ai-agent"
+  ],
   "license": "MIT",
+  "author": "gjlmotea",
+  "homepage": "https://github.com/gjlmotea/blockhand-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gjlmotea/blockhand-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gjlmotea/blockhand-mcp/issues"
+  },
+  "mcpName": "io.github.gjlmotea/blockhand-for-minecraft-education-mcp",
   "engines": {
-    "node": "24.21.0"
+    "node": ">=22"
   },
   "packageManager": "pnpm@11.17.0",
   "main": "./dist/index.js",
   "bin": {
-    "minecraft-edu-mcp": "./dist/index.js"
+    "blockhand-mcp": "./dist/index.js"
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "README.zh-TW.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
@@ -37,7 +71,8 @@
     "uninstall:grok": "node scripts/blockhand.mjs uninstall --client=grok",
     "run-plan": "node scripts/run-tools.mjs",
     "verify": "pnpm run typecheck && pnpm run test && pnpm run build && pnpm run smoke && pnpm run hub-smoke",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepack": "pnpm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
