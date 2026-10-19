@@ -152,7 +152,14 @@ Remove with `corepack pnpm run uninstall:claude` (or `uninstall:codex`, and so o
 | Gemini CLI | `~/.gemini/settings.json` (user scope) | Restart the CLI |
 | Grok CLI | `~/.grok/config.toml` | Restart the CLI |
 
-To register by hand, point the client at `<NODE> <REPO>/dist/index.js`, where `<NODE>` is the absolute path from `node -p "process.execPath"` and `<REPO>` is the absolute path of the checkout. Two client quirks: Gemini CLI takes the command and arguments as positional arguments with no `--`, and its default scope is project (use `--scope user` for global). Claude Code's default scope is local; `--scope project` writes a shareable `.mcp.json`, which is handy for a whole class.
+To register by hand, point the client at `<NODE> <REPO>/dist/index.js`, where `<NODE>` is the absolute path from `node -p "process.execPath"` and `<REPO>` is the absolute path of the checkout. Claude Code and Gemini CLI place the command differently:
+
+```bash
+claude mcp add blockhand --scope user -- <NODE> <REPO>/dist/index.js
+gemini mcp add --scope user blockhand <NODE> <REPO>/dist/index.js
+```
+
+Claude Code wants `--` before the command. Gemini CLI takes the command right after the name (`gemini mcp add [options] <name> <commandOrUrl> [args...]`); a `--` there would leave it without a command. Gemini only needs `--` after the command, in front of server arguments that collide with its own options, and BlockHand takes no arguments. Gemini's default scope is project, so use `--scope user` to make it global. Claude Code's default scope is local; `--scope project` writes a shareable `.mcp.json`, which is handy for a whole class. Sources: [Claude Code](https://code.claude.com/docs/en/mcp), [Gemini CLI](https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md).
 
 ## Tools
 

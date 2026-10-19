@@ -6,7 +6,14 @@ import { DEFAULT_UNDO_BLOCKS } from '../domain/build/undo-plan.js';
 import { registerResources } from './register-resources.js';
 import { registerTools } from './register-tools.js';
 
-export const SERVER_NAME = 'minecraft-edu-mcp';
+/**
+ * 握手時回報的 serverInfo。對外的產品名是 BlockHand，name 與 npm 套件、執行檔同名。
+ *
+ * client 端的註冊名（`claude mcp add <名稱>`、設定檔的鍵）由使用者自己取，工具前綴也跟著那個名字走；
+ * serverInfo 只用來顯示，改它不會讓既有的註冊失效。共用中樞認的是 buildId，也不看這個名字。
+ */
+export const SERVER_NAME = 'blockhand-mcp';
+export const SERVER_TITLE = 'BlockHand';
 
 /**
  * 單次 tools/call 引數的元素上限（陣列元素加物件成員），SDK 在 zod 驗證之前先數。
@@ -27,7 +34,7 @@ export function createMcpServer(options: {
   readonly guardWrite?: WriteGuard;
 }): McpServer {
   const server = new McpServer(
-    { name: SERVER_NAME, version: options.version },
+    { name: SERVER_NAME, title: SERVER_TITLE, version: options.version },
     {
       maxToolInputElements: MAX_TOOL_INPUT_ELEMENTS,
       instructions: [

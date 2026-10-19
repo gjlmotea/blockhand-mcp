@@ -546,12 +546,16 @@ describe('createEncryptionOffer', () => {
   /**
    * 真機回歸：未加引號時 Minecraft 會在 base64 的第一個 `/` 斷句，回
    * 「語法錯誤：預期外的『/』」，握手失敗後遊戲會靜默丟棄之後所有指令。
-   * 這個測試跑一千組金鑰，確保含 `/` 或 `+` 的情況一定被引號包住。
+   * 產生金鑰直到 `/` 與 `+` 都各出現過，確保含它們的參數一定被引號包住。
+   *
+   * 舊版固定跑一千組 P-384 金鑰，閒置時約 0.7 秒，機器忙的時候會超過 5 秒的逾時。
+   * 一組金鑰的 base64 有一百多個隨機字元，`/`、`+` 各自出現的機率約九成，
+   * 通常一兩組就夠；上限 200 組只是保險，兩個字元都等不到的機率小到可以忽略。
    */
   it('兩個參數一律加引號，base64 的 / 與 + 不會截斷指令', () => {
-    let sawSlashOrPlus = false;
+    const seen = new Set<string>();
 
-    for (let i = 0; i < 1000; i += 1) {
+    for (let i = 0; i < 200 && seen.size < 2; i += 1) {
       const parts = createEncryptionOffer().commandLine.split(' ');
       const publicKey = parts[1] ?? '';
       const salt = parts[2] ?? '';
@@ -559,11 +563,13 @@ describe('createEncryptionOffer', () => {
       expect(publicKey.startsWith('"') && publicKey.endsWith('"')).toBe(true);
       expect(salt.startsWith('"') && salt.endsWith('"')).toBe(true);
 
-      if (/[/+]/.test(publicKey) || /[/+]/.test(salt)) sawSlashOrPlus = true;
+      for (const char of ['/', '+']) {
+        if (publicKey.includes(char) || salt.includes(char)) seen.add(char);
+      }
     }
 
-    // 保護測試本身：如果一千組都沒出現 / 或 +，這條就沒有真的驗到東西。
-    expect(sawSlashOrPlus).toBe(true);
+    // 保護測試本身：/ 與 + 沒有都出現過，這條就沒有真的驗到東西。
+    expect([...seen].sort()).toEqual(['+', '/']);
   });
 
   it('公鑰壞掉時給出明確錯誤而不是崩潰', () => {

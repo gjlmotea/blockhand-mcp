@@ -319,7 +319,7 @@ export function createWsMinecraftConnection(options: WsConnectionOptions): Minec
     }
 
     if (options.debugFrames) {
-      process.stderr.write(`[minecraft-edu-mcp] frame: ${raw}\n`);
+      process.stderr.write(`[blockhand-mcp] frame: ${raw}\n`);
     }
 
     let parsed: IncomingMessage;

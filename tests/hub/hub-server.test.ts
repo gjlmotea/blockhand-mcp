@@ -77,7 +77,12 @@ function structured(result: unknown): Record<string, unknown> {
   return ((result as { readonly structuredContent?: unknown }).structuredContent ?? {}) as Record<string, unknown>;
 }
 
-describe('shared hub', () => {
+/**
+ * 這組測試起真的 HTTP server、真的計時：閒置關機至少要等 idleMs 加一次巡檢，
+ * 「有人報到就不關」那條要撐過兩倍以上的 idleMs，閒置時就要 3 秒多。
+ * 預設 5 秒的逾時在機器忙的時候不夠，這裡明訂 20 秒；真的卡住仍然會失敗。
+ */
+describe('shared hub', { timeout: 20_000 }, () => {
   it('serves the same tools to every session over one shared game connection', async () => {
     const hub = await start(createFakeConnection());
     const first = await attach(hub);

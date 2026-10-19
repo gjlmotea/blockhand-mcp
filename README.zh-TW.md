@@ -152,7 +152,14 @@ corepack pnpm run doctor          # 加 --client=claude 等可檢查其他 clien
 | Gemini CLI | `~/.gemini/settings.json`（user scope） | 重開 CLI |
 | Grok CLI | `~/.grok/config.toml` | 重開 CLI |
 
-要手動註冊時，讓 client 執行 `<NODE> <REPO>/dist/index.js`：`<NODE>` 是 `node -p "process.execPath"` 印出的絕對路徑，`<REPO>` 是這份 clone 的絕對路徑。兩個 client 的特性：Gemini CLI 的 command 與引數是位置參數，不加 `--`，而且預設 scope 是 project（要全域可用請加 `--scope user`）。Claude Code 的預設 scope 是 local；`--scope project` 會寫出可分享的 `.mcp.json`，整班共用時很方便。
+要手動註冊時，讓 client 執行 `<NODE> <REPO>/dist/index.js`：`<NODE>` 是 `node -p "process.execPath"` 印出的絕對路徑，`<REPO>` 是這份 clone 的絕對路徑。Claude Code 與 Gemini CLI 放 command 的位置不同：
+
+```bash
+claude mcp add blockhand --scope user -- <NODE> <REPO>/dist/index.js
+gemini mcp add --scope user blockhand <NODE> <REPO>/dist/index.js
+```
+
+Claude Code 要在 command 前面加 `--`。Gemini CLI 的 command 直接接在名稱後面（`gemini mcp add [options] <name> <commandOrUrl> [args...]`），在那裡加 `--` 反而會讓它找不到 command。Gemini 只有在 command 之後、伺服器引數跟它自己的選項撞名時才需要 `--`，而 BlockHand 不帶任何引數。Gemini 的預設 scope 是 project，要全域可用請加 `--scope user`。Claude Code 的預設 scope 是 local；`--scope project` 會寫出可分享的 `.mcp.json`，整班共用時很方便。出處：[Claude Code](https://code.claude.com/docs/en/mcp)、[Gemini CLI](https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md)。
 
 ## 工具
 

@@ -1,6 +1,6 @@
 {
   "name": "@gjlmotea/blockhand-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "BlockHand: MCP server for Minecraft Education Edition over the official /connect (/wsserver) WebSocket. No add-on or behavior pack needed. Agent robot control, 24 build shapes merged into minimal /fill commands, block reading, region comparison and game events.",
   "keywords": [

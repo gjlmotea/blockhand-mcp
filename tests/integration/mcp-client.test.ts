@@ -52,6 +52,10 @@ describe('MCP 工具面', () => {
     client = await connect(fake);
   });
 
+  it('握手回報的是產品名，不是舊的 minecraft-edu-mcp', () => {
+    expect(client.getServerVersion()).toMatchObject({ name: 'blockhand-mcp', title: 'BlockHand' });
+  });
+
   it('註冊了完整的工具面', async () => {
     const { tools } = await client.listTools();
     const names = tools.map((tool) => tool.name).sort();
