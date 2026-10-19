@@ -1,0 +1,245 @@
+# Publishes the package to npm and the server to the official MCP Registry
+# when a v* tag is pushed. The tag has to point at a commit on main, and its
+# version has to equal package.json "version", server.json "version" and
+# server.json "packages[0].version".
+#
+# No secrets are stored here. npm uses trusted publishing (OIDC): the package's
+# settings on npmjs.com name this repository and the workflow file
+# "release.yml". The MCP Registry uses `mcp-publisher login github-oidc`.
+#
+# Running the workflow by hand (workflow_dispatch) only verifies and packs.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "24.21.0"
+  PNPM_VERSION: "11.17.0"
+  NPM_MIN_VERSION: "11.5.1"
+  MCP_PUBLISHER_VERSION: "1.8.1"
+  MCP_PUBLISHER_SHA256: "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc"
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+
+jobs:
+  build:
+    name: Verify and pack
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      package: ${{ steps.version.outputs.package }}
+      server: ${{ steps.version.outputs.server }}
+      tarball: ${{ steps.pack.outputs.tarball }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Enable pnpm through corepack
+        run: |
+          corepack enable pnpm
+          actual="$(pnpm --version)"
+          if [ "$actual" != "$PNPM_VERSION" ]; then
+            echo "::error::pnpm is $actual, expected $PNPM_VERSION"
+            exit 1
+          fi
+          echo "node $(node --version), pnpm $actual"
+
+      - name: Check versions and names
+        id: version
+        run: |
+          name="$(jq -r .name package.json)"
+          version="$(jq -r .version package.json)"
+          mcp_name="$(jq -r .mcpName package.json)"
+          server_name="$(jq -r .name server.json)"
+          server_version="$(jq -r .version server.json)"
+          package_version="$(jq -r '.packages[0].version' server.json)"
+          package_id="$(jq -r '.packages[0].identifier' server.json)"
+          registry_type="$(jq -r '.packages[0].registryType' server.json)"
+          failed=0
+          fail() { echo "::error::$1"; failed=1; }
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || fail "package.json version \"$version\" is not a release version"
+          [ "$server_version" = "$version" ] || fail "server.json version is $server_version, package.json has $version"
+          [ "$package_version" = "$version" ] || fail "server.json packages[0].version is $package_version, package.json has $version"
+          [ "$server_name" = "$mcp_name" ] || fail "server.json name is $server_name, package.json mcpName is $mcp_name"
+          [ "$package_id" = "$name" ] || fail "server.json packages[0].identifier is $package_id, package.json name is $name"
+          [ "$registry_type" = "npm" ] || fail "server.json packages[0].registryType is $registry_type, expected npm"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            [ "$GITHUB_REF_NAME" = "v$version" ] || fail "tag $GITHUB_REF_NAME does not match version $version"
+            git merge-base --is-ancestor HEAD origin/main || fail "tag $GITHUB_REF_NAME does not point at a commit on main"
+          fi
+          [ "$failed" = 0 ] || exit 1
+          {
+            echo "version=$version"
+            echo "package=$name"
+            echo "server=$server_name"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify
+        run: pnpm run verify
+
+      - name: Pack
+        id: pack
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          destination="$RUNNER_TEMP/pack"
+          mkdir -p "$destination"
+          pnpm pack --pack-destination "$destination"
+          shopt -s nullglob
+          tarballs=("$destination"/*.tgz)
+          if [ "${#tarballs[@]}" -ne 1 ]; then
+            echo "::error::expected one tarball, found ${#tarballs[@]}"
+            exit 1
+          fi
+          tarball="${tarballs[0]}"
+          packed="$(tar -xzOf "$tarball" package/package.json | jq -r .version)"
+          if [ "$packed" != "$VERSION" ]; then
+            echo "::error::the tarball has version $packed, expected $VERSION"
+            exit 1
+          fi
+          sha256sum "$tarball"
+          echo "tarball=$(basename "$tarball")" >> "$GITHUB_OUTPUT"
+
+      - name: Keep the tarball for the publish job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-package
+          path: ${{ runner.temp }}/pack/${{ steps.pack.outputs.tarball }}
+          if-no-files-found: error
+          retention-days: 7
+
+  npm:
+    name: Publish to npm
+    needs: build
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Check the npm version
+        run: |
+          actual="$(npm --version)"
+          if ! printf '%s\n%s\n' "$NPM_MIN_VERSION" "$actual" | sort -V -C; then
+            echo "::error::npm $actual is older than $NPM_MIN_VERSION, which trusted publishing needs"
+            exit 1
+          fi
+          echo "npm $actual"
+
+      - name: Download the tarball
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-package
+          path: ${{ runner.temp }}/pack
+
+      - name: Publish
+        env:
+          PACKAGE: ${{ needs.build.outputs.package }}
+          VERSION: ${{ needs.build.outputs.version }}
+          TARBALL: ${{ runner.temp }}/pack/${{ needs.build.outputs.tarball }}
+        run: |
+          integrity="sha512-$(openssl dgst -sha512 -binary "$TARBALL" | base64 -w0)"
+          published="$(npm view "$PACKAGE@$VERSION" dist.integrity 2>/dev/null || true)"
+          if [ -n "$published" ]; then
+            if [ "$published" = "$integrity" ]; then
+              echo "::notice::$PACKAGE@$VERSION is already on npm with this exact tarball; nothing to publish"
+              exit 0
+            fi
+            echo "::error::$PACKAGE@$VERSION is already on npm with different contents"
+            exit 1
+          fi
+          dist_tag=()
+          case "$VERSION" in *-*) dist_tag=(--tag next) ;; esac
+          npm publish "$TARBALL" --access public --provenance "${dist_tag[@]}"
+
+  registry:
+    name: Publish to the MCP Registry
+    needs: [build, npm]
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PACKAGE: ${{ needs.build.outputs.package }}
+      SERVER: ${{ needs.build.outputs.server }}
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Wait until npm serves the version
+        run: |
+          # The MCP Registry reads mcpName from this exact URL.
+          url="https://registry.npmjs.org/$(jq -rn --arg s "$PACKAGE" '$s|@uri')/$VERSION"
+          for _ in $(seq 1 60); do
+            mcp_name="$(curl -fsS "$url" 2>/dev/null | jq -r '.mcpName // empty' || true)"
+            if [ "$mcp_name" = "$SERVER" ]; then
+              echo "npm serves $PACKAGE@$VERSION with mcpName $mcp_name"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::npm did not serve $PACKAGE@$VERSION with mcpName $SERVER within 10 minutes"
+          exit 1
+
+      - name: Install mcp-publisher
+        run: |
+          archive="mcp-publisher_linux_amd64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/$archive"
+          echo "$MCP_PUBLISHER_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" mcp-publisher
+          "$RUNNER_TEMP/mcp-publisher" --version
+
+      - name: Publish
+        run: |
+          url="https://registry.modelcontextprotocol.io/v0.1/servers/$(jq -rn --arg s "$SERVER" '$s|@uri')/versions/$VERSION"
+          if [ "$(curl -s -o /dev/null -w '%{http_code}' "$url")" = "200" ]; then
+            echo "::notice::$SERVER $VERSION is already in the MCP Registry; nothing to publish"
+            exit 0
+          fi
+          "$RUNNER_TEMP/mcp-publisher" login github-oidc
+          "$RUNNER_TEMP/mcp-publisher" publish
+          for _ in $(seq 1 12); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' "$url")" = "200" ]; then
+              echo "The MCP Registry lists $SERVER $VERSION"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::mcp-publisher finished, but the MCP Registry does not list $SERVER $VERSION"
+          exit 1
