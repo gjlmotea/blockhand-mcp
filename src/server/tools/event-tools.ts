@@ -11,8 +11,8 @@ const eventRecordSchema = z
     cursor: z.number(),
     receivedAt: z.string(),
     eventName: z.string(),
-    properties: z.record(z.unknown()),
-    measurements: z.record(z.unknown()).nullable(),
+    properties: z.record(z.string(), z.unknown()),
+    measurements: z.record(z.string(), z.unknown()).nullable(),
   })
   .strict();
 

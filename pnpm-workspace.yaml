@@ -2,3 +2,6 @@ allowBuilds:
   esbuild: true
 nodeLinker: hoisted
 verifyDepsBeforeRun: false
+overrides:
+  vite: 8.2.4
+  source-map-js: 1.2.2

@@ -84,7 +84,7 @@ export const commandOutcomeSchema = () =>
       commandLine: z.string(),
       statusCode: z.number().nullable(),
       statusMessage: z.string().nullable(),
-      data: z.record(z.unknown()).nullable(),
+      data: z.record(z.string(), z.unknown()).nullable(),
       elapsedMs: z.number(),
       undo: undoStatusSchema().optional(),
     })
