@@ -387,6 +387,67 @@ describe('協定漂移的可發現性', () => {
 });
 
 /**
+ * 協作階梯：背景 > 前景 > 玩家自己動手。
+ *
+ * 用這個 MCP 的人，他的 AI 不會讀我們工作區的規範文件——但一定會收到 server instructions。
+ * 所以「優先在背景操作、不搶玩家的螢幕、不把 AI 做得到的事推給玩家」必須寫在這裡，
+ * 而且要釘死：曾經有 AI 拿到畫面權限就直接去點視窗，還把重載推回給玩家，
+ * 兩個都是因為這幾句話不在它眼前。有人整理 instructions 刪掉其中一句，這裡會紅。
+ */
+describe('協作階梯寫在每個客戶端都看得到的地方', () => {
+  async function instructionsText() {
+    const fake = createFakeConnection();
+    const client = await connect(fake);
+    return client.getInstructions() ?? '';
+  }
+
+  /**
+   * 這一段的原文。測試自己存一份，不從原始碼 import：
+   * 若從原始碼 import，有人刪掉一個子句時兩邊一起變，測試照樣綠。
+   * 要改這段，就得連這裡一起改——那是有意識的決定。
+   */
+  const EXPECTED_POLICY =
+    'Keep the player in control of their screen. Order of preference for every step: ' +
+    '(1) background: game commands go through this bridge, and keys for the chat bar or menus go through a background key tool ' +
+    '(on Windows this package ships one, the blockhand-keys command, whose --help lists its options; the package README, under Hands-off operation, shows how to start it); ' +
+    '(2) foreground: only for a step the background cannot do. Before taking the foreground, tell the person which step it is, ' +
+    'which background method you tried or checked, and what blocked it; if you cannot name all three, you do not need the foreground. ' +
+    'Bring the game forward briefly and give focus back right after; ' +
+    '(3) the player: only for what an AI cannot do, such as signing in; never type or read passwords. ' +
+    'When unsure, move up this list, not down. Never hand a step to the player that you could do yourself.';
+
+  it('協作順序整段原文送到客戶端，一個子句都不能少', async () => {
+    expect(await instructionsText()).toContain(EXPECTED_POLICY);
+  });
+
+  it('任何地方都沒有「請玩家打字」這種把事情推給玩家的句子', async () => {
+    const text = await instructionsText();
+    expect(text).not.toMatch(/\bask (?:the )?(?:player|user|them) to (?:type|enter|press)/i);
+    expect(text).not.toMatch(/\bhave (?:the )?(?:player|user) (?:type|enter|press)/i);
+  });
+
+  it('連線前先看 connected，沒連上由 AI 照 connectCommand 自己打', async () => {
+    const text = await instructionsText();
+    expect(text).toContain('check connected in mc_status');
+    expect(text).toContain('type the connectCommand that mc_status reports, exactly as given, in the game chat yourself');
+  });
+
+  it('講明主選單沒有聊天列', async () => {
+    expect(await instructionsText()).toContain('the main menu and the world list have no chat bar');
+  });
+
+  it('資源包重載：先等世界載完再驗，驗不到才由 AI 在聊天列打', async () => {
+    const text = await instructionsText();
+    expect(text).toContain('send reload all, confirm the game is back in the world, then check');
+    expect(text).toContain('Only if the new content is missing, type /reload all in the game chat yourself');
+  });
+
+  it('不把「兩次取樣沒動」當成可以重載的證明', async () => {
+    expect(await instructionsText()).toContain('only means no movement was seen');
+  });
+});
+
+/**
  * mc_structure 的 saveMode 語意：memory 是「這次協作的暫存」，disk 是「使用者
  * 明確說要保留」。預設必須是 memory——使用者只說「存一下」卻在他的世界資料夾
  * 留下檔案，是那種當下沒人察覺、事後才變成問題的事。

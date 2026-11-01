@@ -109,6 +109,8 @@ The game connects to the server, not the other way round.
    /connect 127.0.0.1:19131
    ```
 
+If your agent can send keys to the game window (see [Hands-off operation](#hands-off-operation)), it types this itself; it reads the exact command from `mc_status`.
+
 When the connection is made, a green "✔ BlockHand connected" line appears in the chat, in the game's own language: English, Traditional Chinese or Simplified Chinese, and English for any other game language. You can also ask the AI to call `mc_status`, which returns the exact `connectCommand`.
 
 ### 3. Ask for something
@@ -255,13 +257,14 @@ Events go into a ring buffer that you read with a cursor. `dropped > 0` means po
 All AI sessions on one machine (desktop apps, CLIs, IDEs, parallel tasks) share a background **hub** that owns port 19131 and the single game connection. Each session's MCP server is a thin proxy to it. The first session that needs the hub starts it; every open session checks in once a minute, so port 19131 stays served while any session is open, and a hub that dies is restarted right away. The hub exits about 10 minutes after the last session and the game are both gone.
 
 - Switching sessions, models or AI tools does not drop the game connection.
-- `/reload all` and moving to another world do not drop it either during a normal load. At the main menu the connection stays open, but every command answers "Unknown command".
+- `/reload all`, moving to another world, and going back to the main menu and into a world again do not drop it either during a normal load. At the main menu the connection stays open, but every command answers "Unknown command". The main menu and the world list have no chat bar, so `/connect` can only be typed inside a world.
 - You only need to type `/connect` again after restarting Minecraft, or after the hub side closes the connection (the chat shows "Connection closed").
 - **You do not need to type `/connect` while connected.** Doing so shows nothing at all, which looks like a hang; typing and commands keep working as usual.
-- `mc_run_command` can send `reload all`. For development packs, scripts and behavior pack JSON reload this way; resource packs only reload when a player types `/reload all` in the chat. Wait until the world has finished loading before sending more commands. While a load hangs, the bridge's 30-second keepalive probe keeps running, and after three unanswered probes in a row the bridge closes the connection.
+- `mc_run_command` can send `reload all`. For development packs, scripts, behavior pack JSON and custom blocks reload this way. Whether resource packs (textures, language files) also reload this way has differed between the two setups tested, cause unknown: a Windows machine reloaded changed and added language strings and changed item textures, a macOS machine did not reload a changed language file. So the agent works in this order: send `reload all`, wait until the game is back in the world (send nothing else meanwhile), then check (a `titleraw` with a `translate` component shows what the client resolves; look at a texture). Only if the new content is missing does it type `/reload all` in the game chat itself.
+- A script cannot connect the game: `/connect` run from a behavior pack script, whether as the player or as a dimension, is accepted but opened no connection in the setups tested, while `/connect` typed in the chat did. An in-game "connect" button therefore cannot replace typing it; the agent types it instead. While a load hangs, the bridge's 30-second keepalive probe keeps running, and after three unanswered probes in a row the bridge closes the connection.
 - If an old BlockHand without hub support already holds 19131, new sessions fall back to standalone mode on a random port; use the address `mc_status` reports. Standalone mode never takes 19131 itself.
 
-To reconnect quickly, press `T` in the game, press `↑` to recall the last command, then Enter.
+Manual fallback, for a player working without an agent that can send keys: to reconnect quickly, press `T` in the game, press `↑` to recall the last command, then Enter.
 
 ## Hands-off operation
 
@@ -269,10 +272,10 @@ BlockHand is built so that an agent can keep working without stopping to ask the
 
 **The agent does these itself, without asking first:**
 
-- `/reload all` after changing a pack. Scripts and behavior pack JSON reload with `mc_run_command reload all`; a resource pack only reloads when `/reload all` is typed in the game chat, so the agent types it there.
+- `/reload all` after changing a pack: send `reload all` with `mc_run_command`, wait until the game is back in the world, check that the new content arrived, and only if a resource pack change is missing, type `/reload all` in the game chat.
 - Leaving the world and entering it again.
 - Restarting Minecraft when a reload hangs on the loading screen (see [Troubleshooting](#troubleshooting)), or before a reload when the game process has been open for hours. The world was saved when the reload began.
-- Typing `/connect 127.0.0.1:19131` again after a restart.
+- Typing the `connectCommand` that `mc_status` reports whenever the game is not connected (check `connected` first; the port is not always 19131).
 
 **Only the player does:**
 
@@ -280,10 +283,31 @@ BlockHand is built so that an agent can keep working without stopping to ask the
 
 **Before acting, the agent checks:**
 
-- That nobody is in the middle of playing. Look at the screen, or compare `mc_query_target` position and rotation twice a few seconds apart. If the player is playing, wait instead of interrupting.
+- That nobody is in the middle of playing. Look at the screen and compare `mc_query_target` position and rotation twice a few seconds apart; if either changed, the player is playing, so wait instead of interrupting. No change only means no movement was seen (a player in their inventory or crafting stands still too), so it is not permission by itself: reload when the person asked for it or is working with the agent right now, and ask when unsure.
 - That the right world is selected before pressing Play: never enter or test in a world that is not the one being worked on.
 
-**How it reaches the game window.** BlockHand itself only talks to the game over the WebSocket. Typing in chat, picking a world and restarting the game go through the AI client's own desktop automation (computer use). Prefer tools that act on the game window in the background, so the person at the computer keeps their screen. Practical notes from macOS:
+**How it reaches the game window.** BlockHand itself only talks to the game over the WebSocket. Typing in chat, picking a world and restarting the game go through the AI client's own desktop automation. Work in this order, and keep the person at the computer in control of their screen:
+
+1. **Background.** Game commands go through BlockHand. Keys for the chat bar and menus go through a tool that delivers them to the game window without bringing it forward.
+2. **Foreground**, only for the one step the background cannot do. Before taking the screen, tell the person which step it is, which background method was tried or checked, and what blocked it (if you cannot name all three, you do not need the foreground). Give focus back right after.
+3. **The player**, only for what an agent cannot do, such as signing in.
+
+When unsure, move up this list, not down: losing the screen for a few seconds costs the person less than being interrupted to type a command themselves.
+
+Practical notes from Windows:
+
+- This package ships a background key tool for Windows, `blockhand-keys` (`npx -p @gjlmotea/blockhand-mcp blockhand-keys --help`, or `node scripts/game-keys.mjs --help` in a source checkout). It posts keyboard messages to the game window with Win32 `PostMessage` (`WM_KEYDOWN`, `WM_KEYUP`, `WM_CHAR`), which never changes focus, and it sends no mouse input.
+  - `--probe` finds the game window and sends nothing. With several games open, pass `--pid`.
+  - `--open-chat` presses `T`; take a screenshot to confirm the chat bar opened, then `--send "/reload all"` types into it and presses Enter. `--chat` does both at once; use it only when the game shows no screen or menu.
+  - `--keys escape`, `--keys down,return`, `--keys shift+tab` and so on drive the menus.
+  - It prints `focus_unchanged=True` when the foreground window did not change. Its output says what was queued, not what the game did, so confirm on screen or through BlockHand. A second call while one is sending gets `ERROR=busy`; that lock covers one call, so between calls (open the chat bar, screenshot, send) another agent could still type. Let only one agent drive the game screen at a time.
+  - It only targets the Education edition: the executable must report the product name `Minecraft Education` (regular Bedrock runs under the same process name).
+- Keyboard messages sent this way reach the chat bar, the pause menu and the world list while another app keeps the focus. Chat commands, menu navigation with the arrow keys and Enter, leaving the world and entering it again all work this way.
+- Leaving and re-entering a world with keys only: Escape opens the pause menu; Down twice selects the save-and-leave button, then Enter; the confirmation starts on Cancel, so Up, then Enter. On the play screen, Down moves the white frame to the worlds tile, then Enter. In the world list, Tab twice reaches the search box, and Down from there lands on the most recently played world. Enter opens that world's small menu; before pressing Play, check that the date and size shown under the menu belong to the intended world.
+- Mouse buttons posted the same way did not mine blocks in the setup tested, so mining or attacking cannot be done in the background with this method.
+- Git Bash rewrites an argument that starts with `/` into a file path, so a chat command passed through it arrives as `C:/Program Files/Git/reload all`; `blockhand-keys` detects this and refuses. Send chat commands from PowerShell, or set `MSYS_NO_PATHCONV=1`.
+
+Practical notes from macOS:
 
 - Chat: press `T`, wait for the chat bar to appear (the first characters are lost if you type immediately), type, then Enter.
 - World list: mouse clicks on world tiles sent in the background can land on "New world" instead. Use the keyboard: type the world's name into the search box so only that world remains, press the right arrow to select it, Enter for its menu, Enter again for Play.

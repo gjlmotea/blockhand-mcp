@@ -41,12 +41,15 @@
   "packageManager": "pnpm@11.17.0",
   "main": "./dist/index.js",
   "bin": {
-    "blockhand-mcp": "./dist/index.js"
+    "blockhand-mcp": "./dist/index.js",
+    "blockhand-keys": "./scripts/game-keys.mjs"
   },
   "files": [
     "dist",
     "README.md",
-    "README.zh-TW.md"
+    "README.zh-TW.md",
+    "scripts/game-keys.mjs",
+    "scripts/game-keys.ps1"
   ],
   "publishConfig": {
     "access": "public"
@@ -54,7 +57,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node scripts/build-stamp.mjs --before && tsc -p tsconfig.build.json && node scripts/build-stamp.mjs",
     "smoke": "node scripts/stdio-smoke.mjs",
     "hub-smoke": "node scripts/hub-smoke.mjs",
     "live": "node scripts/live-check.mjs",

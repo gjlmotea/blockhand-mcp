@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { arch, homedir, platform } from 'node:os';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -18,6 +19,7 @@ import {
   createDesiredRegistration,
   isAbsolutePortablePath,
 } from './lib/mcp-registration.mjs';
+import { buildInputs, STAMP } from './lib/build-inputs.mjs';
 import { CLIENT_IDS, resolveClient } from './lib/mcp-clients.mjs';
 
 const EXPECTED_PNPM_VERSION = '11.17.0';
@@ -524,6 +526,116 @@ function inspectSmoke(checks) {
   }
 }
 
+const sha256 = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
+
+function pidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A synced repository rebuilds nothing by itself: after a pull, node_modules can still hold
+ * older packages and dist can still be an older build, while "dist/index.js exists" passes.
+ * Three separate questions, each answered from content, never from modification times
+ * (a checkout or clone rewrites mtimes without changing anything):
+ *   1. was node_modules installed from the current lockfile?
+ *   2. was dist built from the current source, configs and lockfile?
+ *   3. is the running hub using the build on disk?
+ * Each one reports "unknown" instead of guessing when it lacks the data.
+ */
+async function inspectBuildFreshness(checks) {
+  const root = fileURLToPath(new URL('..', import.meta.url));
+
+  // 1. pnpm keeps an exact copy of the lockfile it installed from. Comparing it covers
+  //    direct and transitive dependencies alike, whatever the version specifiers look like.
+  const lockfile = resolve(root, 'pnpm-lock.yaml');
+  const installedFrom = resolve(root, 'node_modules/.pnpm/lock.yaml');
+  if (existsSync(lockfile)) {
+    if (!existsSync(installedFrom)) {
+      addCheck(checks, 'deps-installed', 'warn',
+        'cannot tell which lockfile node_modules was installed from; run corepack pnpm install', installedFrom);
+    } else {
+      const same = sha256(lockfile) === sha256(installedFrom);
+      addCheck(checks, 'deps-installed', same ? 'pass' : 'warn',
+        same
+          ? 'node_modules was installed from the current pnpm-lock.yaml'
+          : 'node_modules was installed from a different pnpm-lock.yaml: run corepack pnpm install',
+        installedFrom);
+    }
+  }
+
+  // 1b. A package.json edited after the last install: its specifiers no longer match the
+  //     lockfile's, and `pnpm install --frozen-lockfile` would refuse to run.
+  if (existsSync(lockfile)) {
+    const lock = readFileSync(lockfile, 'utf8').replace(/\r\n/g, '\n');
+    const importer = lock.match(/\nimporters:\n\n {2}\.:\n([\s\S]*?)\n(?=\S)/)?.[1] ?? '';
+    const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+    const wanted = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+    const drift = [];
+    for (const [name, spec] of Object.entries(wanted)) {
+      const escaped = name.replace(/[.*+?^${}()|[\]\/]/g, '\$&');
+      const locked = importer.match(new RegExp(`\n {6}'?${escaped}'?:\n {8}specifier: ([^\n]+)`))?.[1]?.trim();
+      if (locked !== String(spec)) drift.push(`${name}: package.json ${spec}, lockfile ${locked ?? '(missing)'}`);
+    }
+    addCheck(checks, 'lockfile-current', drift.length === 0 ? 'pass' : 'warn',
+      drift.length === 0
+        ? 'pnpm-lock.yaml matches the dependencies in package.json'
+        : 'package.json and pnpm-lock.yaml disagree: run corepack pnpm install',
+      drift.join('; ') || undefined);
+  }
+
+  // 2. The build records a fingerprint of its inputs (scripts/build-stamp.mjs).
+  const stampPath = resolve(root, STAMP);
+  if (existsSync(DIST_PATH)) {
+    if (!existsSync(stampPath)) {
+      addCheck(checks, 'build-inputs', 'warn',
+        'cannot tell what dist was built from (it has no build stamp); run corepack pnpm run build', stampPath);
+    } else {
+      let recorded;
+      try {
+        recorded = JSON.parse(readFileSync(stampPath, 'utf8')).hash;
+      } catch {
+        recorded = undefined;
+      }
+      const current = buildInputs(root).hash;
+      addCheck(checks, 'build-inputs', recorded === current ? 'pass' : 'warn',
+        recorded === current
+          ? 'dist was built from the current source, configs and lockfile'
+          : 'dist was built from different inputs than are on disk now: run corepack pnpm run build',
+        `recorded ${String(recorded).slice(0, 12)} / current ${current.slice(0, 12)}`);
+    }
+  }
+
+  // 3. Ask the build on disk for its id with the hub's own function (src/hub/settings.ts
+  //    buildId), so the doctor can never compute it differently from the hub.
+  const hubDir = process.env.MINECRAFT_EDU_HUB_DIR?.trim() || resolve(homedir(), '.blockhand');
+  const hubFile = resolve(hubDir, 'hub.json');
+  const settingsJs = resolve(root, 'dist/hub/settings.js');
+  if (existsSync(hubFile) && existsSync(settingsJs)) {
+    let state;
+    try {
+      state = JSON.parse(readFileSync(hubFile, 'utf8'));
+    } catch {
+      state = undefined;
+    }
+    if (state && typeof state.pid === 'number' && pidAlive(state.pid)) {
+      const version = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version;
+      const { buildId } = await import(pathToFileURL(settingsJs).href);
+      const disk = buildId(version);
+      addCheck(checks, 'hub-build', state.build === disk ? 'pass' : 'warn',
+        state.build === disk
+          ? 'the running hub uses the build on disk'
+          : 'the running hub was started from another build; it loads the one on disk at its next normal restart. '
+            + 'It refuses to shut down while the game is connected, by design: do not force it.',
+        `hub ${state.build} / disk ${disk}`);
+    }
+  }
+}
+
 async function doctor({ json, client }) {
   const checks = [];
   addCheck(
@@ -540,6 +652,7 @@ async function doctor({ json, client }) {
     existsSync(DIST_PATH) ? 'dist/index.js exists' : 'dist/index.js is missing; run the build first',
     DIST_PATH,
   );
+  await inspectBuildFreshness(checks);
   inspectPnpm(checks);
   inspectPlatform(checks);
   const registrationState = inspectRegistration(checks, client);

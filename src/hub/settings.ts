@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { RuntimeConfig } from '../composition.js';
@@ -57,9 +57,21 @@ export function readHubSettings(config: RuntimeConfig, env: NodeJS.ProcessEnv = 
   };
 }
 
-/** tsc rewrites every output on each build, so this file's mtime identifies the build. */
+/**
+ * Identifies the build on disk. Preferred: the fingerprint of the inputs it was built from
+ * (dist/.build-inputs.json, written by scripts/build-stamp.mjs), so an identical rebuild keeps
+ * its id and does not needlessly replace a running hub, and different content never shares one.
+ * Without a stamp, this module's mtime (tsc rewrites every output on each build).
+ */
 export function buildId(version: string): string {
-  return `${version}+${String(Math.trunc(statSync(fileURLToPath(import.meta.url)).mtimeMs))}`;
+  const here = fileURLToPath(import.meta.url);
+  try {
+    const stamp = JSON.parse(readFileSync(join(dirname(here), '..', '.build-inputs.json'), 'utf8')) as { hash?: unknown };
+    if (typeof stamp.hash === 'string' && /^[0-9a-f]{64}$/.test(stamp.hash)) return `${version}+${stamp.hash.slice(0, 16)}`;
+  } catch {
+    // No stamp (a source run, or a build from before stamps existed): fall back below.
+  }
+  return `${version}+${String(Math.trunc(statSync(here).mtimeMs))}`;
 }
 
 export function newToken(): string {
