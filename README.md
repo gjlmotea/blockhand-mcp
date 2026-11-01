@@ -12,6 +12,7 @@ It talks to the game only through Minecraft Education's built-in `/connect` (`/w
 - **Fast building**: shapes are merged into the fewest possible `/fill` commands (a solid sphere of radius 8 goes from 2,000+ blocks to under 200 commands).
 - **Local by default**: the game WebSocket listens on `127.0.0.1` unless `MINECRAFT_EDU_WS_HOST` changes it, and no account or online service is involved.
 - **One fixed address**: every AI session on the machine shares one background hub, so the game always connects with `/connect 127.0.0.1:19131`.
+- **Hands-off by design**: the agent reloads packs, rejoins the world and restarts a hung game by itself instead of asking the player to. The player is needed only to sign in. See [Hands-off operation](#hands-off-operation).
 - **Installers** for Claude Code, Codex, Gemini CLI and Grok CLI when you run from source.
 
 > The `/connect` command is an official interface. The WebSocket message protocol behind it has no published stability guarantee, so behavior should be re-checked after game updates.
@@ -22,6 +23,7 @@ It talks to the game only through Minecraft Education's built-in `/connect` (`/w
 - [Install from source](#install-from-source)
 - [Tools](#tools)
 - [Connecting and staying connected](#connecting-and-staying-connected)
+- [Hands-off operation](#hands-off-operation)
 - [How building stays fast](#how-building-stays-fast)
 - [Reading blocks](#reading-blocks)
 - [Undo (off by default)](#undo-off-by-default)
@@ -261,6 +263,32 @@ All AI sessions on one machine (desktop apps, CLIs, IDEs, parallel tasks) share 
 
 To reconnect quickly, press `T` in the game, press `↑` to recall the last command, then Enter.
 
+## Hands-off operation
+
+BlockHand is built so that an agent can keep working without stopping to ask the player to click, type or confirm things it can do itself. Every pause costs the player's time, and a tool people have to babysit does not get used.
+
+**The agent does these itself, without asking first:**
+
+- `/reload all` after changing a pack. Scripts and behavior pack JSON reload with `mc_run_command reload all`; a resource pack only reloads when `/reload all` is typed in the game chat, so the agent types it there.
+- Leaving the world and entering it again.
+- Restarting Minecraft when a reload hangs on the loading screen (see [Troubleshooting](#troubleshooting)), or before a reload when the game process has been open for hours. The world was saved when the reload began.
+- Typing `/connect 127.0.0.1:19131` again after a restart.
+
+**Only the player does:**
+
+- Signing in. Passwords are never typed or read by the agent. If the game comes back already signed in, nothing is needed from the player at all.
+
+**Before acting, the agent checks:**
+
+- That nobody is in the middle of playing. Look at the screen, or compare `mc_query_target` position and rotation twice a few seconds apart. If the player is playing, wait instead of interrupting.
+- That the right world is selected before pressing Play: never enter or test in a world that is not the one being worked on.
+
+**How it reaches the game window.** BlockHand itself only talks to the game over the WebSocket. Typing in chat, picking a world and restarting the game go through the AI client's own desktop automation (computer use). Prefer tools that act on the game window in the background, so the person at the computer keeps their screen. Practical notes from macOS:
+
+- Chat: press `T`, wait for the chat bar to appear (the first characters are lost if you type immediately), type, then Enter.
+- World list: mouse clicks on world tiles sent in the background can land on "New world" instead. Use the keyboard: type the world's name into the search box so only that world remains, press the right arrow to select it, Enter for its menu, Enter again for Play.
+- Restart: `osascript -e 'tell application id "com.microsoft.minecraft-edu" to quit'`, then `open -g -j -b com.microsoft.minecraft-edu` starts it again in the background.
+
 ## How building stays fast
 
 Sending one `setblock` per block would mean tens of thousands of WebSocket round trips for a medium-sized sphere. BlockHand's pipeline is:
@@ -343,6 +371,13 @@ Everything has a default; no `.env` file is needed.
 4. The last lines of `~/.blockhand/hub.log` (every line is timestamped, rejected handshakes are logged too).
 
 When a built-in command such as `time` answers "Unknown command", the tools add a hint: the game is most likely not in a world.
+
+**A reload hangs on the loading screen.** In a world with development packs, `/reload all` (from chat or from the bridge) is a full rejoin: the game saves the world, returns to the menu and loads the world again, and `camera` settings are cleared. A fresh game process does this in under 10 seconds; one that has been open for hours takes 30–45 seconds, and the progress bar pauses around 25% for a while. On macOS 1.26.x it has also stopped for good at 25% or 60% (four times, each after the same game process had been open for an hour or more and had reloaded several times).
+
+- While it hangs, the world has in fact loaded: a process sample shows the server and the client world ticking normally while the main thread draws the loading screen. It is waiting for a signal that does not come, and it does not recover by itself. Escape and closing the bridge connection do not help.
+- Treat a bar that has not moved for about 90 seconds as stuck. Take a sample first if you want evidence (`sample <pid> 5 -file <file>` on macOS).
+- Recovery: quit Minecraft and start it again; the agent does this itself without asking (see [Hands-off operation](#hands-off-operation)). The world was saved when the reload began. On macOS, `osascript -e 'tell application id "com.microsoft.minecraft-edu" to quit'` ends it within a second (it may still print "User canceled"; check that the process is gone), and `open -g -j -b com.microsoft.minecraft-edu` starts it again without taking the screen. Then sign in, enter the world and type `/connect` again.
+- Do not send bridge commands while a reload is loading; they time out. Restarting a game that has been open for a long time before a reload makes a hang less likely.
 
 **`mc_status` shows a port other than 19131.** Another process holds 19131. Find it with `lsof -nP -iTCP:19131 -sTCP:LISTEN` (macOS) and check whether the hub is running with `ls ~/.blockhand`.
 
