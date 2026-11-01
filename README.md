@@ -288,6 +288,8 @@ BlockHand is built so that an agent can keep working without stopping to ask the
 - Chat: press `T`, wait for the chat bar to appear (the first characters are lost if you type immediately), type, then Enter.
 - World list: mouse clicks on world tiles sent in the background can land on "New world" instead. Use the keyboard: type the world's name into the search box so only that world remains, press the right arrow to select it, Enter for its menu, Enter again for Play.
 - Restart: `osascript -e 'tell application id "com.microsoft.minecraft-edu" to quit'`, then `open -g -j -b com.microsoft.minecraft-edu` starts it again in the background.
+- Right-click and attack clicks sent in the background are not received by the game, so entity interactions cannot be tested by clicking. Give the add-on a `/scriptevent` probe that calls the same handler the interaction event would (for example, run the before-interact gate and the interact handler for the nearest entity of a type) and another that prints the entity's state without opening it. Then the agent can test interactive mechanics end to end without the player.
+- Photos for checking a build: note the player's position, horizontal rotation and game mode, tell them with `tellraw`, move them with `tp`, take the screenshot, then put them back. Pitch cannot be read back, so say beforehand that the view will return level.
 
 ## How building stays fast
 
@@ -374,8 +376,8 @@ When a built-in command such as `time` answers "Unknown command", the tools add 
 
 **A reload hangs on the loading screen.** In a world with development packs, `/reload all` (from chat or from the bridge) is a full rejoin: the game saves the world, returns to the menu and loads the world again, and `camera` settings are cleared. A fresh game process does this in under 10 seconds; one that has been open for hours takes 30–45 seconds, and the progress bar pauses around 25% for a while. On macOS 1.26.x it has also stopped for good at 25% or 60% (four times, each after the same game process had been open for an hour or more and had reloaded several times).
 
-- While it hangs, the world has in fact loaded: a process sample shows the server and the client world ticking normally while the main thread draws the loading screen. It is waiting for a signal that does not come, and it does not recover by itself. Escape and closing the bridge connection do not help.
-- Treat a bar that has not moved for about 90 seconds as stuck. Take a sample first if you want evidence (`sample <pid> 5 -file <file>` on macOS).
+- While it hangs, the world has in fact loaded: a process sample shows the server and the client world ticking normally while the main thread draws the loading screen. It is waiting for a signal that does not come. Escape and closing the bridge connection do not help. Once, a bar stopped at 50% did enter the world by itself after about 3 minutes.
+- Treat a bar that has not moved for about 90 seconds as stuck. Take a sample first if you want evidence (`sample <pid> 5 -file <file>` on macOS); waiting one or two more minutes before restarting costs little.
 - Recovery: quit Minecraft and start it again; the agent does this itself without asking (see [Hands-off operation](#hands-off-operation)). The world was saved when the reload began. On macOS, `osascript -e 'tell application id "com.microsoft.minecraft-edu" to quit'` ends it within a second (it may still print "User canceled"; check that the process is gone), and `open -g -j -b com.microsoft.minecraft-edu` starts it again without taking the screen. Then sign in, enter the world and type `/connect` again.
 - Do not send bridge commands while a reload is loading; they time out. Restarting a game that has been open for a long time before a reload makes a hang less likely.
 
@@ -392,6 +394,7 @@ When a built-in command such as `time` answers "Unknown command", the tools add 
 - The Agent exists only in Education Edition.
 - Event names and the `agent` subcommands are not formally documented by Mojang; they come from public observation and may change with game updates. `mc_events_subscribe` accepts names outside the known list but marks them unverified.
 - `@s` does not always resolve for commands sent over WebSocket, so `mc_query_target` defaults to `@p`.
+- Commands sent over WebSocket are parsed with an older command version: `execute as @e … at @s run …` is a syntax error, use the legacy form `execute @e[...] ~ ~ ~ <command>`; in Education 1.26.x `summon` also rejects the rotation arguments, so summon first and turn the entity with `tp`. Add-on scripts calling `runCommand` are a different path; prefer the script API there instead of relying on either syntax.
 - Some responses arrive with a request ID that matches no request. When exactly one request is pending and no timeout has happened on the connection, the bridge may attribute the response by inference and logs it; after any timeout it only accepts exact matches. Modifying commands are never resent automatically.
 - Commands are sent one at a time with a queue of at most 64; anything beyond that is refused with `command-queue-full`, and queued commands that outlive their own timeout are dropped and reported as not sent.
 - After rebuilding, the running hub keeps the old version until it restarts; a hub restart drops the game connection.
