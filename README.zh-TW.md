@@ -405,6 +405,8 @@ Minecraft Education 沒有直接回傳某個位置是什麼方塊的指令，所
 - 救法：結束 Minecraft 再開，由 AI 自己做、不先問（見[全自動操作](#全自動操作)）。重載開始時世界已經存檔。macOS 上 `osascript -e 'tell application id "com.microsoft.minecraft-edu" to quit'` 一秒內就結束（可能還是印出「User canceled」，要確認行程真的沒了），`open -g -j -b com.microsoft.minecraft-edu` 在背景重開、不搶畫面。之後登入、進世界、重打 `/connect`。
 - 重載載入中不要送橋接指令，會逾時。遊戲開很久時，先重開再重載比較不會卡。
 
+**重載後停在「無法連線至世界……無效的租用戶 ID」。** Education 的登入憑證過期了（macOS 1.26.x 登入約 3.5 小時後就看過）。按「確定」會存檔回到選單，但從選單開任何世界都是同一個錯誤。只能重開重登：照上面的做法結束再開 Minecraft，玩家登入，再進世界、重打 `/connect`。長時間測試時把重要的驗證排前面；登入已經好幾個小時的遊戲，先重開再重載。
+
 **`mc_status` 顯示 19131 以外的埠。** 有別的行程佔著 19131。用 `lsof -nP -iTCP:19131 -sTCP:LISTEN`（macOS）找出它，用 `ls ~/.blockhand` 確認中樞有沒有在跑。
 
 **Windows 的 Microsoft Store（UWP）版。** Windows 的應用程式隔離會擋下 loopback 連線。用 `CheckNetIsolation LoopbackExempt` 加上豁免。

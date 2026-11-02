@@ -405,6 +405,8 @@ When a built-in command such as `time` answers "Unknown command", the tools add 
 - Recovery: quit Minecraft and start it again; the agent does this itself without asking (see [Hands-off operation](#hands-off-operation)). The world was saved when the reload began. On macOS, `osascript -e 'tell application id "com.microsoft.minecraft-edu" to quit'` ends it within a second (it may still print "User canceled"; check that the process is gone), and `open -g -j -b com.microsoft.minecraft-edu` starts it again without taking the screen. Then sign in, enter the world and type `/connect` again.
 - Do not send bridge commands while a reload is loading; they time out. Restarting a game that has been open for a long time before a reload makes a hang less likely.
 
+**A reload ends on "Couldn't connect to the world … Invalid tenant ID".** The Education sign-in has expired (seen on macOS 1.26.x from about 3.5 hours after signing in). Pressing OK saves the world and returns to the menu, but starting any world from the menu shows the same error. Only a restart and a fresh sign-in fix it: quit and start Minecraft as above, the player signs in, then enter the world and type `/connect` again. In long sessions, do the important checks first, or restart before a reload when the game has been signed in for several hours.
+
 **`mc_status` shows a port other than 19131.** Another process holds 19131. Find it with `lsof -nP -iTCP:19131 -sTCP:LISTEN` (macOS) and check whether the hub is running with `ls ~/.blockhand`.
 
 **Windows, Microsoft Store (UWP) version.** Windows app isolation blocks loopback connections. Grant an exemption with `CheckNetIsolation LoopbackExempt`.
